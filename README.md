@@ -1,93 +1,211 @@
-# school-data-bridge
+# 学校数据导入服务
 
+## 数据流转
 
+学校数据导入和数据清洗转换使用 Node service 完成，然后调用 Java 服务写入数据库
 
-## Getting started
+## 技术架构
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+┌───────────────────────────────────────────────────────────────────┐
+│ 多数据源接入层（统一入口，兼容 3 种场景） │
+│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │
+│ │ 主动拉取 │ │ 被动接收 │ │ 直连数据库 │ │
+│ │ （调对方 API） │ │ （对方调我方） │ │ （直连 DB） │ │
+│ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ │
+└─────────┼────────────────┼────────────────┼─────────────────────┘
+│ │ │
+▼ ▼ ▼
+┌───────────────────────────────────────────────────────────────────┐
+│ 数据源适配器层（核心：统一接口，标准化输出） │
+│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │
+│ │ API 适配器 │ │ WebHook 适配器 │ │ DB 适配器 │ │
+│ │ （axios） │ │ （Express/Koa）│ │ （ORM/原生 SQL）│ │
+│ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ │
+│ └─────────────────┼────────────────┘ │
+│ │（统一格式：{ traceId, tenantId, rawData }）│
+└───────────────────────────┼───────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 任务调度层（BullMQ 生产者 / 事件驱动） │
+│ （支持：手动触发 / 定时任务 / 失败任务重试 / 优先级队列） │
+└───────────────────────────────┬─────────────────────────────────────────┘
+│ [Job Enqueue]
+┌───────────────────────────────▼─────────────────────────────────────────┐
+│ 任务持久化队列层（暂存 Redis） │
+│ （解决：状态持久化 / 任务限流 / 并发锁 / 延迟任务处理） │
+└───────────────────────────────┬─────────────────────────────────────────┘
+│ [Job Dequeue]
+┌───────────────────────────────▼─────────────────────────────────────────┐
+│ 配置引擎与数据暂存层（Context & Staging） │
+│ （功能：读取学校个性化字段映射 / 原始数据快照存入 SQLite 或 Redis） │
+└───────────────────────────────┬─────────────────────────────────────────┘
+│
+┌───────────────────────────────▼─────────────────────────────────────────┐
+│ 数据清洗转换层（核心：Pipeline 模式） │
+│ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
+│ │ 1. 字典映射 │──▶ │ 2. Zod 严格校验 │──▶ │ 3. 业务逻辑自检 │ │
+│ └──────────────────┘ └──────────────────┘ └──────────────────┘ │
+│ 处理：异构字段转换 node-json-transform、脏数据标记、数据标准化、唯一性预校验 │
+└───────────────────────────────┬─────────────────────────────────────────┘
+│ [Batch / Stream]
+┌───────────────────────────────▼─────────────────────────────────────────┐
+│ 高可靠写入层（Java 服务调用器） │
+│ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
+│ │ p-limit 控流 │──▶ │ 幂等写入 API │──▶ │ 背压/重试策略 │ │
+│ └──────────────────┘ └──────────────────┘ └──────────────────┘ │
+│ （方案：分批写入、Axios-Retry 指数退避、根据 Java 负载动态降频） │
+└───────────────────────────────┬─────────────────────────────────────────┘
+│
+┌───────────────────────────────▼─────────────────────────────────────────┐
+│ 结果反馈与审计层（闭环体系） │
+│ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
+│ │ 更新任务状态表 │ │ 导出失败报告(XL) │ │ 异常实时告警 │ │
+│ └──────────────────┘ └──────────────────┘ └──────────────────┘ │
+│ （全链路 TraceId 追踪，记录：成功数、失败原因、跳过记录、执行耗时） │
+└─────────────────────────────────────────────────────────────────────────┘
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## 核心工具解读
 
-## Add your files
+### 1. BullMQ
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+BullMQ 是基于 Redis 构建的 Node.js 专用分布式任务队列/调度工具，核心用于管理异步、耗时、分布式任务
+
+- 基于 Redis 作为存储层，读写性能优异，支持海量任务存储
+- 支持任务分片、多消费者并发处理，能轻松应对高并发任务场景
+- 具备任务超时检测、死信队列（失败多次的任务单独归档）功能，保证任务流转的完整性。
+- 提供可视化监控工具（Bull Board），可直观查看队列状态、任务执行情况、失败任务详情。
+
+### 2. SQLite/Redis
+
+- 承担暂存数据 + 分布式协同 + 高性能任务调度支撑
+- 读取原始数据后先落库暂存，标记为 pending，清洗完标记为 cleaned，Java 写入成功后标记为 synced。
+- 支持断点续传，且方便在 Java 写入失败时进行重试，而无需重新请求 API。
+
+### 3. 客户个性化字段映射
 
 ```
-cd existing_repo
-git remote add origin http://110.41.63.228:30080/cbes_frontend/school-data-bridge.git
-git branch -M main
-git push -uf origin main
+// tenant001.json5
+{
+  tenantId: "tenant001",
+  schoolName: "XX中学",
+  dataSource: {
+    type: "excel",
+    config: {
+      filePath: "./data/tenant001_users.xlsx",
+      sheetName: "用户列表",
+      startRow: 2 // 跳过表头行
+    }
+  },
+  // 字段映射规则（供 node-json-transform 使用）
+  fieldMap: [
+    {
+      sourceField: "XM", // 客户字段：姓名
+      targetField: "name", // Java服务字段
+      converter: "default",
+      required: true
+    },
+    {
+      sourceField: "XB", // 客户字段：性别（1=男，0=女）
+      targetField: "gender",
+      converter: "genderConverter",
+      converterConfig: { 1: "male", 0: "female" }
+    }
+  ],
+  batchConfig: {
+    batchSize: 100,
+    retryTimes: 3
+  }
+}
 ```
 
-## Integrate with your tools
+### 4. node-json-transform / jsonata
 
-- [ ] [Set up project integrations](http://110.41.63.228:30080/cbes_frontend/school-data-bridge/-/settings/integrations)
+根据字段映射生成符合我们数据模型的 json
 
-## Collaborate with your team
+```
+const JsonTransform = require('node-json-transform').JsonTransform;
+const { getSchoolConfig } = require('./configEngine'); // 读取 JSON5 配置
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+// 转换函数库（与 JSON5 配置中的 converter 对应）
+const converters = {
+  default: (value) => value,
+  genderConverter: (value, config) => config[value] || 'unknown'
+};
 
-## Test and Deploy
+// 执行数据转换
+async function transformRawData(tenantId, rawData) {
+  // 1. 从 JSON5 配置中读取字段映射规则
+  const schoolConfig = await getSchoolConfig(tenantId);
+  const { fieldMap } = schoolConfig;
 
-Use the built-in continuous integration in GitLab.
+  // 2. 构造 node-json-transform 配置
+  const transformMap = {
+    map: fieldMap.map(item => ({
+      key: item.targetField, // 目标字段
+      value: item.sourceField, // 源字段
+      // 自定义转换函数
+      transform: (value) => {
+        const converter = converters[item.converter];
+        return converter(value, item.converterConfig || {});
+      }
+    })),
+    // 可选：过滤无效数据
+    filter: (item) => {
+      return fieldMap.every(map => !map.required || !!item[map.sourceField]);
+    }
+  };
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+  // 3. 执行转换
+  const transformer = JsonTransform(transformMap);
+  const transformedData = transformer.transform(rawData);
 
-***
+  return transformedData;
+}
+```
 
-# Editing this README
+### 5. 类型校验 Zod
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+把住「数据质量关」，提前过滤格式非法、缺失关键信息的脏数据，避免无效数据流入下游 Java 服务，减少接口调用失败和数据异常。
 
-## Suggestions for a good README
+### 6. ETag/MD5（非必须）
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+对比上次抓取的数据，如果数据没变则跳过，减少无效数据处理
 
-## Name
-Choose a self-explaining name for your project.
+### 7. 数据写入
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+调用 Java 接口分批写入、Axios-Retry 指数退避、根据 Java 负载动态降频
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 8. Java 服务的核心支持要求
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+1. 针对「幂等写入 API」：Java 服务必须实现幂等性支持（核心要求）这是保障数据不重复的关键
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+2. 针对「p-limit 控流 + 分批写入」：Java 服务需支持批量写入接口,明确批量接口的单次接收数据上限;支持接口限流提示（如返回 429 Too Many Requests 状态码），便于 Node.js 端感知 Java 服务负载
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+3. 针对「背压 / 重试策略」：Java 服务需提供两类支撑接口 / 能力
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+   - 明确可重试的错误类型，并返回标准 HTTP 状态码；
+   - 接口响应时间稳定，或明确超时时间;
+   - 提供健康检查 / 负载监控接口(可选)
+   - 支持优雅降级提示
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+### 9. 日志监控
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+1.  生成 TraceId：在任务创建（生产者入队）时，用 uuid/nanoid 生成全局唯一 TraceId；
+2.  透传 TraceId：将 TraceId 贯穿所有环节（队列层 → 暂存层 → 转换层 → 写入层 → 审计层），作为日志打印、状态记录、报告生成的核心关联字段
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+### 10. 任务状态表字段设计
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+核心字段，可按需扩展：
+| 字段名 | 字段类型 | 核心作用 |
+|--------|----------|----------|
+| trace_id | 字符串（主键） | 全链路唯一标识，关联所有环节 |
+| tenant_id | 字符串 | 关联租户，实现多租户隔离 |
+| task_id | 字符串 | 关联队列任务 ID，便于查询队列日志 |
+| school_name | 字符串 | 业务标识，便于人工排查 |
+| status | 字符串 | 任务核心状态（如 pending/running/success/failed/skipped）|
+| stats | JSON 字符串 | 统计数据（成功数、失败数、跳过数、总数据量、执行耗时） |
+| error_msg | 字符串 | 任务失败时的异常信息（如 Java 服务不可用） |
+| create_time | 时间戳 | 任务创建时间 |
+| update_time | 时间戳 | 任务状态更新时间 |
+| finish_time | 时间戳 | 任务完成（成功 / 失败 / 跳过）时间 |

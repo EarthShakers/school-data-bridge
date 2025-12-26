@@ -1,0 +1,52 @@
+{
+  tenantId: "tenant001",
+  schoolName: "XX中学",
+  entityType: "teacher",
+  dataSource: {
+    type: "api",
+    config: {
+      url: "https://api.example.com/v1/students",
+      method: "GET",
+      headers: {
+        Authorization: "Bearer some-token",
+      },
+    },
+  },
+  fieldMap: [
+    {
+      sourceField: "ID",
+      targetField: "id",
+      converter: "default",
+      required: true,
+    },
+    {
+      sourceField: "XM",
+      targetField: "name",
+      converter: "default",
+      required: true,
+    },
+    {
+      sourceField: "GH",
+      targetField: "code",
+      converter: "default",
+      required: true,
+    },
+    {
+      sourceField: "ORG_IDS",
+      targetField: "orgClientIds",
+      converter: "default",
+      required: true,
+    },
+    {
+      sourceField: "XB",
+      targetField: "gender",
+      converter: "genderConverter",
+      converterConfig: { "1": "male", "0": "female" },
+    },
+  ],
+  batchConfig: {
+    batchSize: 100,
+    retryTimes: 3,
+  },
+}
+

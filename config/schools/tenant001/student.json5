@@ -1,0 +1,23 @@
+{
+  tenantId: "tenant001",
+  schoolName: "XX中学",
+  entityType: "student",
+  dataSource: {
+    type: "api",
+    config: {
+      url: "https://api.example.com/v1/students_api",
+      method: "GET",
+    },
+  },
+  fieldMap: [
+    { sourceField: "id", targetField: "id", converter: "default", required: true },
+    { sourceField: "name", targetField: "name", converter: "default", required: true },
+    { sourceField: "stu_no", targetField: "code", converter: "default", required: true },
+    { sourceField: "class_id", targetField: "classId", converter: "default", required: true },
+  ],
+  batchConfig: {
+    batchSize: 50,
+    retryTimes: 3,
+  },
+}
+
