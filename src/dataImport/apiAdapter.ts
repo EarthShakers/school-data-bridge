@@ -1,6 +1,7 @@
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { SchoolConfig, DataEnvelope } from "../types";
+import { studentMockData, teacherMockData } from "../../mock";
 
 export async function fetchFromExternalApi(
   config: SchoolConfig
@@ -20,23 +21,14 @@ export async function fetchFromExternalApi(
       return {
         traceId,
         tenantId,
-        rawData: [
-          { id: "S001", name: "小明", stu_no: "2023001", class_id: "class_a" },
-          { id: "S002", name: "小红", stu_no: "2023002", class_id: "class_a" },
-        ],
+        rawData: studentMockData,
       };
     }
 
     return {
       traceId,
       tenantId,
-      rawData: [
-        { ID: "T001", XM: "张三", GH: "1001", ORG_IDS: ["dept1"], XB: "1" },
-        { ID: "T002", XM: "李四", GH: "1002", ORG_IDS: ["dept1"], XB: "0" },
-        { ID: "T003", XM: "王五", GH: "1003", ORG_IDS: ["dept2"], XB: "1" },
-        { ID: "T004", XM: "无效性别", GH: "1004", ORG_IDS: ["dept2"], XB: "9" },
-        { ID: "T005", GH: "1005", ORG_IDS: ["dept1"], XB: "1" }, // 缺失 XM (name)，将被过滤
-      ],
+      rawData: teacherMockData,
     };
   }
 

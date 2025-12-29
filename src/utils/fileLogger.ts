@@ -1,12 +1,13 @@
 import fs from "fs";
 import path from "path";
+import dayjs from "dayjs";
 
 /**
  * 生成简短的文件名后缀：时间戳_短ID
  */
 function generateShortSuffix(traceId: string) {
   const now = new Date();
-  const timestamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19); // 2023-10-27T10-20-30
+  const timestamp = dayjs(now).format("YYYY-MM-DD_HH:mm:ss"); // 2025-12-29_10:20:30
   const shortId = traceId.slice(0, 5);
   return `${timestamp}_${shortId}`;
 }
@@ -35,7 +36,9 @@ export function saveImportResult(
       failed: failedData.length,
     },
     // 成功的数据（移除内部标识字段以保持干净）
-    successData: successData.map(({ _importStatus, _importError, ...rest }) => rest),
+    successData: successData.map(
+      ({ _importStatus, _importError, ...rest }) => rest
+    ),
     // 失败的数据（包含原因）
     failedData: failedData.map(({ _importStatus, _importError, ...rest }) => ({
       data: rest,

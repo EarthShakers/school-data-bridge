@@ -1,6 +1,6 @@
 import { DataEnvelope, SchoolConfig } from "../types";
-import { converters } from "../transformers/converters";
-import { schemas } from "./schemas"; // 导入拆分后的 schemas
+import { converters } from "../mapping/converterFn";
+import { schemas } from "../domain/schemas"; // 👈 修改：从 domain/schemas 导入
 
 // Use require because node-json-transform doesn't have good TS types
 const { transform } = require("node-json-transform");

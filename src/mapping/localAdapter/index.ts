@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import JSON5 from "json5";
-import { SchoolConfig } from "../types";
+import { SchoolConfig } from "../../types";
 
 const CONFIG_BASE_PATH = path.join(process.cwd(), "config", "schools");
 

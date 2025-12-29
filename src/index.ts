@@ -2,25 +2,12 @@ import {
   getSchoolConfig,
   getAvailableEntities,
   getAvailableTenants,
-} from "./core/configEngine";
-import { fetchFromExternalApi } from "./adapters/apiAdapter";
+} from "./mapping/localAdapter"; // 👈 修改：从 config/ 导入
+import { fetchFromExternalApi } from "./dataImport";
 import { transformAndValidate } from "./core/pipeline";
-import { writeToInternalJavaService } from "./services/javaService";
-import { baseConfig } from "../config/baseConfig";
+import { writeToInternalJavaService } from "./saveData/javaService";
 import { saveImportResult } from "./utils/fileLogger";
-
-/**
- * 根据实体类型获取 Java 写入接口地址
- */
-function getEndpointForEntity(entityType: string): string {
-  const base = baseConfig.JAVA_USER_SERVICE_BASE_URL;
-  const map: Record<string, string> = {
-    teacher: `${base}/v1/base/teacher/batch`,
-    student: `${base}/v1/base/stu/batch`,
-    organization: `${base}/v1/base/teacher/org/batch`, // 或者根据业务分教师/学生组织
-  };
-  return map[entityType] || `${base}/v1/base/data/batch`;
-}
+import { baseConfig, getEndpointForEntity } from "./saveData/config";
 
 /**
  * 执行单个导入任务
@@ -33,7 +20,8 @@ async function executeSingleTask(tenantId: string, entityType: string) {
   try {
     const config = await getSchoolConfig(tenantId, entityType);
     const envelope = await fetchFromExternalApi(config);
-    const { allRecords, successCount, failedCount } = await transformAndValidate(envelope, config);
+    const { allRecords, successCount, failedCount } =
+      await transformAndValidate(envelope, config);
 
     // 💾 保存统一的导入结果（包含统计、成功数据、失败数据及原因）
     saveImportResult(tenantId, entityType, envelope.traceId, allRecords);

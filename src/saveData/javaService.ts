@@ -1,6 +1,6 @@
 import axios from "axios";
 import pLimit from "p-limit";
-import { baseConfig } from "../../config/baseConfig";
+import { baseConfig } from "./config";
 
 export interface WriteOptions {
   batchSize: number;
