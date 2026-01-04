@@ -17,7 +17,9 @@ export function getEndpointForEntity(entityType: string): string {
   const map: Record<string, string> = {
     teacher: `${base}/v1/base/teacher/batch`,
     student: `${base}/v1/base/stu/batch`,
-    organization: `${base}/v1/base/teacher/org/batch`, // 或者根据业务分教师/学生组织
+    teacherOrganizations: `${base}/v1/base/teacher/org/batch`,
+    studentOrganizations: `${base}/v1/base/stu/org/batch`,
+    class: `${base}/v1/base/class/batch`,
   };
   return map[entityType] || `${base}/v1/base/data/batch`;
 }

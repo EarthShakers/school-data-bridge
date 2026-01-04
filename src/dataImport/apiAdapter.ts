@@ -6,6 +6,10 @@ import { studentMockData, teacherMockData } from "../../mock";
 export async function fetchFromExternalApi(
   config: SchoolConfig
 ): Promise<DataEnvelope> {
+  if (config.dataSource.type !== "api") {
+    throw new Error("[ApiAdapter] Invalid dataSource type");
+  }
+
   const { dataSource, tenantId } = config;
   const { url, method = "GET", headers = {}, params = {} } = dataSource.config;
 

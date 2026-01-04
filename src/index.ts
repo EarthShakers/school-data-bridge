@@ -2,8 +2,8 @@ import {
   getSchoolConfig,
   getAvailableEntities,
   getAvailableTenants,
-} from "./mapping/localAdapter"; // 👈 修改：从 config/ 导入
-import { fetchFromExternalApi } from "./dataImport";
+} from "./mapping/localAdapter";
+import { fetchData } from "./dataImport"; // 👈 修改：使用统一的 fetchData
 import { transformAndValidate } from "./core/pipeline";
 import { writeToInternalJavaService } from "./saveData/javaService";
 import { saveImportResult } from "./utils/fileLogger";
@@ -19,7 +19,7 @@ async function executeSingleTask(tenantId: string, entityType: string) {
 
   try {
     const config = await getSchoolConfig(tenantId, entityType);
-    const envelope = await fetchFromExternalApi(config);
+    const envelope = await fetchData(config); // 👈 修改：自动根据类型抓取
     const { allRecords, successCount, failedCount } =
       await transformAndValidate(envelope, config);
 

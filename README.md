@@ -226,3 +226,7 @@ async function transformRawData(tenantId, rawData) {
 | create_time | 时间戳 | 任务创建时间 |
 | update_time | 时间戳 | 任务状态更新时间 |
 | finish_time | 时间戳 | 任务完成（成功 / 失败 / 跳过）时间 |
+
+### 同步顺序
+
+- 先组织架构 后同步人员
