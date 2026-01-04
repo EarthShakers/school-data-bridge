@@ -13,6 +13,11 @@ export interface SchoolConfig {
     batchSize: number;
     retryTimes: number;
   };
+  syncConfig?: {
+    enabled?: boolean;
+    cron?: string; // Cron 表达式，如 "0 2 * * *"
+    priority?: number; // 优先级
+  };
 }
 
 export interface ApiDataSource {
@@ -22,6 +27,12 @@ export interface ApiDataSource {
     method?: "GET" | "POST";
     headers?: Record<string, string>;
     params?: Record<string, any>;
+    pagination?: {
+      pageParam: string; // 页码参数名，如 "page"
+      sizeParam: string; // 每页数量参数名，如 "limit"
+      pageSize: number; // 每页大小
+      startPage?: number; // 起始页码，默认 1
+    };
   };
 }
 
@@ -33,6 +44,8 @@ export interface DbDataSource {
     viewName?: string;
     sql?: string;
     modelName?: string;
+    batchSize?: number; // 数据库抓取批次大小
+    offset?: number; // 数据库抓取偏移量
   };
 }
 

@@ -1,100 +1,85 @@
-import {
-  getSchoolConfig,
-  getAvailableEntities,
-  getAvailableTenants,
-} from "./mapping/localAdapter";
-import { fetchData } from "./dataImport"; // 👈 修改：使用统一的 fetchData
-import { transformAndValidate } from "./core/pipeline";
-import { writeToInternalJavaService } from "./saveData/javaService";
-import { saveImportResult } from "./utils/fileLogger";
-import { baseConfig, getEndpointForEntity } from "./saveData/config";
-
-/**
- * 执行单个导入任务
- */
-async function executeSingleTask(tenantId: string, entityType: string) {
-  console.log(
-    `\n>>> [Executor] Running: Tenant=${tenantId}, Entity=${entityType}`
-  );
-
-  try {
-    const config = await getSchoolConfig(tenantId, entityType);
-    const envelope = await fetchData(config); // 👈 修改：自动根据类型抓取
-    const { allRecords, successCount, failedCount } =
-      await transformAndValidate(envelope, config);
-
-    // 💾 保存统一的导入结果（包含统计、成功数据、失败数据及原因）
-    saveImportResult(tenantId, entityType, envelope.traceId, allRecords);
-
-    const dataToWrite = allRecords
-      .filter((r) => r._importStatus === "success")
-      .map(({ _importStatus, _importError, _metadata, ...rest }) => rest);
-
-    if (dataToWrite.length === 0) {
-      console.log(
-        `[Executor] Skip: No valid data to write for ${tenantId}:${entityType}`
-      );
-      return;
-    }
-
-    const javaOptions = {
-      batchSize: config.batchConfig.batchSize || baseConfig.DEFAULT_BATCH_SIZE,
-      concurrency: Math.max(1, baseConfig.MAX_GLOBAL_CONCURRENCY / 2),
-      javaEndpoint: getEndpointForEntity(config.entityType),
-    };
-
-    const stats = await writeToInternalJavaService(dataToWrite, javaOptions);
-
-    console.log(`[Executor] Result: ${tenantId}:${entityType} ->`, {
-      total: allRecords.length,
-      valid: successCount,
-      invalid: failedCount,
-      writeSuccess: stats.success,
-      writeFailed: stats.failed,
-    });
-  } catch (error: any) {
-    console.error(
-      `[Executor] Failed: ${tenantId}:${entityType} ->`,
-      error.message
-    );
-  }
-}
+import { getAvailableTenants, getAvailableEntities } from "./mapping/localAdapter";
+import { runSyncTask } from "./core/executor";
+import { setupScheduler } from "./queue/scheduler";
+import { addSyncJob } from "./queue/syncQueue";
 
 /**
  * 主入口：支持多种执行模式
+ * 1. 命令行直接执行 (Immediate)
+ * 2. 启动 Worker 处理队列 (Worker)
+ * 3. 启动 Scheduler 注册定时任务 (Scheduler)
+ * 4. 推送任务到队列 (Producer)
  */
 async function main() {
+  const mode = process.env.RUN_MODE || "manual"; // manual | worker | scheduler | producer
   const arg1 = process.argv[2]; // tenantId or "all"
   const arg2 = process.argv[3]; // entityType or "all"
 
+  console.log(`[Main] 🚀 Starting service in mode: ${mode}`);
+
+  if (mode === "worker") {
+    // 启动 Worker (通过导入启动)
+    require("./queue/worker");
+    return;
+  }
+
+  if (mode === "scheduler") {
+    // 启动调度器并注册 Cron
+    await setupScheduler(arg1); // arg1 是可选的 tenantId
+    // 调度器运行后不需要退出，除非你想只注册一次
+    console.log("[Main] Scheduler is running. Press Ctrl+C to exit.");
+    return;
+  }
+
+  if (mode === "producer") {
+    if (!arg1) {
+      console.log("Usage: RUN_MODE=producer npm start <tenantId|all> [entityType|all]");
+      return;
+    }
+    await pushToQueue(arg1, arg2);
+    process.exit(0);
+  }
+
+  // 默认：手动/立即执行模式
   if (!arg1) {
     console.log("Usage: npm start <tenantId|all> [entityType|all]");
     console.log("Available Tenants:", getAvailableTenants().join(", "));
     return;
   }
 
-  const tenants = arg1 === "all" ? getAvailableTenants() : [arg1];
+  await runImmediately(arg1, arg2);
+  process.exit(0);
+}
 
+/**
+ * 推送任务到 BullMQ 队列
+ */
+async function pushToQueue(arg1: string, arg2?: string) {
+  const tenants = arg1 === "all" ? getAvailableTenants() : [arg1];
   for (const tenantId of tenants) {
     const availableEntities = getAvailableEntities(tenantId);
     const entitiesToRun = !arg2 || arg2 === "all" ? availableEntities : [arg2];
-
-    if (entitiesToRun.length === 0) {
-      console.warn(`[Main] No entities found for tenant: ${tenantId}`);
-      continue;
-    }
-
-    console.log(
-      `[Main] Processing Tenant: ${tenantId} (${entitiesToRun.join(", ")})`
-    );
-
-    // 顺序执行各实体导入，避免对单一数据源或 Java 服务造成瞬间高压
     for (const entityType of entitiesToRun) {
-      await executeSingleTask(tenantId, entityType);
+      await addSyncJob(tenantId, entityType);
     }
   }
-
-  console.log("\n[Main] All tasks finished.");
 }
 
-main().catch(console.error);
+/**
+ * 立即执行同步（原有逻辑）
+ */
+async function runImmediately(arg1: string, arg2?: string) {
+  const tenants = arg1 === "all" ? getAvailableTenants() : [arg1];
+  for (const tenantId of tenants) {
+    const availableEntities = getAvailableEntities(tenantId);
+    const entitiesToRun = !arg2 || arg2 === "all" ? availableEntities : [arg2];
+    for (const entityType of entitiesToRun) {
+      await runSyncTask(tenantId, entityType);
+    }
+  }
+}
+
+main().catch((err) => {
+  console.error("[Main] Fatal Error:", err);
+  process.exit(1);
+});

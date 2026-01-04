@@ -15,6 +15,7 @@
       modelName: "User",
       // 方式 3：手动指定 SQL（如果无法创建视图）
       // sql: "SELECT id as STU_ID, name as STU_NAME FROM students WHERE status = 1",
+      batchSize: 100, // 👈 每次从 DB 抓取的数量
     },
   },
   fieldMap: [
@@ -40,5 +41,10 @@
   batchConfig: {
     batchSize: 500,
     retryTimes: 3,
+  },
+  syncConfig: {
+    enabled: true,
+    cron: "0 2 * * *", // 每天凌晨2点同步
+    priority: 10,
   },
 }

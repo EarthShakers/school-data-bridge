@@ -69,8 +69,7 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
   try {
     let rawData: any[];
 
-    // 💡 优化：从 fieldMap 中提取所有 sourceField，显式查询核心字段
-    // 这样做可以避免 select * 带来的性能开销、字段不可控及合规风险
+    // 从 fieldMap 中提取所有 sourceField，显式查询核心字段
     const selectFields = config.fieldMap
       .map((fm) => fm.sourceField)
       .filter((f) => !!f);
@@ -87,16 +86,26 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
       );
     }
 
+    const batchSize = dataSource.config.batchSize || 1000;
+    const offset = dataSource.config.offset || 0;
+
     if (viewName) {
-      // 视图模式：显式选择字段
-      rawData = await db.select(queryFields).from(viewName);
+      // 视图模式：增加 limit 保护
+      rawData = await db
+        .select(queryFields)
+        .from(viewName)
+        .limit(batchSize)
+        .offset(offset);
     } else if (modelName) {
-      // 模型/表名模式：显式选择字段
-      rawData = await db.select(queryFields).from(modelName);
+      // 模型/表名模式：增加 limit 保护
+      rawData = await db
+        .select(queryFields)
+        .from(modelName)
+        .limit(batchSize)
+        .offset(offset);
     } else if (sql) {
-      // 原生 SQL 模式：注意，原生 SQL 建议用户在 SQL 语句中显式写明字段
+      // 原生 SQL 模式
       const result = await db.raw(sql);
-      // 不同数据库驱动返回的 raw 结构不同，这里需要兼容处理
       rawData = Array.isArray(result) ? result[0] : result.rows || result;
     } else {
       throw new Error(

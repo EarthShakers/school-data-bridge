@@ -11,37 +11,46 @@ export async function fetchFromExternalApi(
   }
 
   const { dataSource, tenantId } = config;
-  const { url, method = "GET", headers = {}, params = {} } = dataSource.config;
+  const {
+    url,
+    method = "GET",
+    headers = {},
+    params = {},
+    pagination,
+  } = dataSource.config;
 
   const traceId = uuidv4();
 
-  // 🧪 Mock 逻辑：如果没有真实 URL 或使用了测试域名，返回 Mock 数据
+  // 🧪 Mock 逻辑
   if (!url || url.includes("example.com")) {
     console.log(
       `[ApiAdapter] 🧪 Using mock data for ${tenantId} (${config.entityType})`
     );
-
-    if (config.entityType === "student") {
-      return {
-        traceId,
-        tenantId,
-        rawData: studentMockData,
-      };
-    }
-
     return {
       traceId,
       tenantId,
-      rawData: teacherMockData,
+      rawData:
+        config.entityType === "student" ? studentMockData : teacherMockData,
     };
   }
 
   try {
+    const finalParams = { ...params };
+
+    if (pagination) {
+      const currentPage = pagination.startPage || 1;
+      finalParams[pagination.pageParam] = currentPage;
+      finalParams[pagination.sizeParam] = pagination.pageSize;
+      console.log(
+        `[ApiAdapter] 📄 Fetching page ${currentPage} (size: ${pagination.pageSize}) for ${tenantId}`
+      );
+    }
+
     const response = await axios({
       url,
       method,
       headers,
-      params,
+      params: finalParams,
     });
 
     return {
