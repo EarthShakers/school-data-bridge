@@ -46,7 +46,7 @@ export async function setupScheduler(filterTenantId?: string) {
             {
               repeat: { pattern: cron },
               priority,
-              jobId: `cron:${tenantId}:${entityType}`, // 固定的 JobId 防止重复
+              jobId: `cron-${tenantId}-${entityType}`, // 修复：不允许包含冒号 ":"
             }
           );
 

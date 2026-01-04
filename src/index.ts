@@ -1,4 +1,9 @@
-import { getAvailableTenants, getAvailableEntities } from "./mapping/localAdapter";
+import "dotenv/config"; // 👈 自动加载 .env 文件，必须放在第一行
+
+import {
+  getAvailableTenants,
+  getAvailableEntities,
+} from "./mapping/localAdapter";
 import { runSyncTask } from "./core/executor";
 import { setupScheduler } from "./queue/scheduler";
 import { addSyncJob } from "./queue/syncQueue";
@@ -33,7 +38,9 @@ async function main() {
 
   if (mode === "producer") {
     if (!arg1) {
-      console.log("Usage: RUN_MODE=producer npm start <tenantId|all> [entityType|all]");
+      console.log(
+        "Usage: RUN_MODE=producer npm start <tenantId|all> [entityType|all]"
+      );
       return;
     }
     await pushToQueue(arg1, arg2);

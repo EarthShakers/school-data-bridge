@@ -19,7 +19,8 @@ export const syncQueue = new Queue(QUEUE_NAME, {
  * 添加单次同步任务
  */
 export async function addSyncJob(tenantId: string, entityType: string, priority = 10) {
-  const jobId = `${tenantId}:${entityType}`;
+  // 修复：BullMQ jobId 不允许包含冒号 ":"，改为使用连字符 "-"
+  const jobId = `${tenantId}-${entityType}`;
   await syncQueue.add(
     "sync-task",
     { tenantId, entityType },

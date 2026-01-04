@@ -13,4 +13,3 @@ export const redisConnection = new IORedis(redisConfig);
 
 // 队列名称常量
 export const QUEUE_NAME = "school-data-sync";
-

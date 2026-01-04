@@ -102,11 +102,11 @@ REDIS_PORT=6379
 
 ---
 
-## 🛠 运行模式
+## 🛠 任务调度
 
 本项目支持多种启动模式，以满足开发调试和生产调度的需求。
 
-### 1. 定时调度模式 (Scheduler)
+### 1. 定时调度生产任务 (Scheduler)
 
 启动调度器，扫描所有租户的 `json5` 配置，并根据 `syncConfig.cron` 注册定时同步任务。
 
@@ -118,7 +118,7 @@ npm run scheduler
 npm run scheduler tenant001
 ```
 
-### 2. 后台处理模式 (Worker)
+### 2. 任务消费 (Worker)
 
 启动任务消费者，监听 Redis 队列并执行具体的抓取、转换和写入逻辑。**生产环境建议部署多个 Worker 实例。**
 
@@ -126,7 +126,7 @@ npm run scheduler tenant001
 npm run worker
 ```
 
-### 3. 手动推送模式 (Producer)
+### 3. 手动推送任务 (Producer)
 
 手动将特定租户的同步任务推入队列，由 Worker 异步处理。
 
@@ -138,7 +138,7 @@ npm run produce tenant001 student_db
 npm run produce tenant001 all
 ```
 
-### 4. 立即执行模式 (Immediate)
+### 4. 立即执行任务，跳过 redis 队列 (Immediate)
 
 跳过队列，直接在当前进程立即执行同步。常用于本地开发调试。
 
