@@ -1,0 +1,303 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import {
+  Card,
+  Row,
+  Col,
+  Button,
+  Input,
+  Table,
+  Badge,
+  Space,
+  Modal,
+  Descriptions,
+  Divider,
+  Empty,
+  Typography,
+  message,
+} from "antd";
+import {
+  SettingOutlined,
+  SaveOutlined,
+  SyncOutlined,
+  HistoryOutlined,
+} from "@ant-design/icons";
+import dayjs from "dayjs";
+
+const { TextArea } = Input;
+const { Text, Paragraph } = Typography;
+
+interface EntityConsoleProps {
+  tenantId: string;
+  entityType: string;
+}
+
+export const EntityConsole: React.FC<EntityConsoleProps> = ({
+  tenantId,
+  entityType,
+}) => {
+  const [config, setConfig] = useState("");
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<any>(null);
+  const [logModalVisible, setLogModalVisible] = useState(false);
+
+  const fetchConfig = async () => {
+    setLoadingConfig(true);
+    try {
+      const res = await fetch(
+        `/api/config?tenantId=${tenantId}&entityType=${entityType}`
+      );
+      const data = await res.json();
+      if (data.content) setConfig(data.content);
+    } catch (err) {
+      message.error("加载配置失败");
+    } finally {
+      setLoadingConfig(false);
+    }
+  };
+
+  const saveConfig = async () => {
+    try {
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, entityType, content: config }),
+      });
+      if (res.ok) message.success("配置已保存");
+      else message.error("保存失败");
+    } catch (err) {
+      message.error("保存失败");
+    }
+  };
+
+  const fetchLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const res = await fetch(
+        `/api/logs?tenantId=${tenantId}&entityType=${entityType}`
+      );
+      const data = await res.json();
+      setLogs(data.logs || []);
+    } catch (err) {
+      message.error("获取日志失败");
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  const viewLogDetail = async (filename: string) => {
+    try {
+      const res = await fetch(
+        `/api/logs?tenantId=${tenantId}&entityType=${entityType}&filename=${filename}`
+      );
+      const data = await res.json();
+      setSelectedLog(data);
+      setLogModalVisible(true);
+    } catch (err) {
+      message.error("读取详细日志失败");
+    }
+  };
+
+  const handleSync = async () => {
+    message.loading(`正在触发同步...`, 0);
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, entityType }),
+      });
+      message.destroy();
+      if (res.ok) {
+        message.success("同步任务已加入队列");
+        setTimeout(fetchLogs, 2000);
+      } else {
+        message.error("任务触发失败");
+      }
+    } catch (err) {
+      message.destroy();
+      message.error("网络错误");
+    }
+  };
+
+  useEffect(() => {
+    fetchConfig();
+    fetchLogs();
+  }, [tenantId, entityType]);
+
+  const logColumns = [
+    {
+      title: "同步时间",
+      dataIndex: "time",
+      render: (t: string) => dayjs(t).format("YYYY-MM-DD HH:mm:ss"),
+    },
+    {
+      title: "统计",
+      dataIndex: "summary",
+      render: (s: any) => (
+        <Space>
+          <Badge status="processing" text={`总数: ${s.total}`} />
+          <Badge status="success" text={`成功: ${s.success}`} />
+          <Badge status="error" text={`失败: ${s.failed}`} />
+        </Space>
+      ),
+    },
+    {
+      title: "操作",
+      render: (record: any) => (
+        <Button
+          size="small"
+          type="link"
+          onClick={() => viewLogDetail(record.filename)}
+        >
+          详情
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <Row gutter={24}>
+        <Col span={14}>
+          <Card
+            title={
+              <span>
+                <SettingOutlined /> 配置编辑 (JSON5)
+              </span>
+            }
+            extra={
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                onClick={saveConfig}
+                loading={loadingConfig}
+              >
+                保存配置
+              </Button>
+            }
+          >
+            <TextArea
+              value={config}
+              onChange={(e) => setConfig(e.target.value)}
+              rows={20}
+              style={{ fontFamily: "monospace", fontSize: "12px" }}
+              placeholder="请输入配置内容..."
+            />
+          </Card>
+        </Col>
+        <Col span={10}>
+          <Card
+            title={
+              <span>
+                <SyncOutlined /> 任务控制
+              </span>
+            }
+            style={{ marginBottom: 24 }}
+          >
+            <Paragraph>
+              <Text type="secondary">配置修改后请先点击保存，再执行同步。</Text>
+            </Paragraph>
+            <Button
+              type="primary"
+              danger
+              icon={<SyncOutlined />}
+              block
+              size="large"
+              onClick={handleSync}
+            >
+              立即执行手动同步
+            </Button>
+          </Card>
+
+          <Card
+            title={
+              <span>
+                <HistoryOutlined /> 最近执行记录
+              </span>
+            }
+          >
+            <Table
+              dataSource={logs}
+              columns={logColumns}
+              size="small"
+              loading={loadingLogs}
+              pagination={false}
+              rowKey="filename"
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      <Modal
+        title="同步执行详情"
+        open={logModalVisible}
+        onCancel={() => setLogModalVisible(false)}
+        footer={null}
+        width={1000}
+      >
+        {selectedLog && (
+          <div>
+            <Descriptions title="执行概览" bordered size="small" column={3}>
+              <Descriptions.Item label="总数">
+                {selectedLog.summary.total}
+              </Descriptions.Item>
+              <Descriptions.Item label="成功">
+                {selectedLog.summary.success}
+              </Descriptions.Item>
+              <Descriptions.Item label="失败">
+                {selectedLog.summary.failed}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider orientation="left">失败记录 (前 50 条)</Divider>
+            {selectedLog.failedData.length > 0 ? (
+              <Table
+                dataSource={selectedLog.failedData
+                  .slice(0, 50)
+                  .map((d: any, i: number) => ({ ...d, key: i }))}
+                size="small"
+                columns={[
+                  {
+                    title: "原始数据",
+                    dataIndex: "data",
+                    render: (d) => (
+                      <pre style={{ fontSize: 10 }}>
+                        {JSON.stringify(d, null, 2)}
+                      </pre>
+                    ),
+                  },
+                  {
+                    title: "原因",
+                    dataIndex: "reason",
+                    render: (r) => (
+                      <Text type="danger">{JSON.stringify(r)}</Text>
+                    ),
+                  },
+                ]}
+                pagination={false}
+              />
+            ) : (
+              <Empty description="没有失败记录" />
+            )}
+
+            <Divider orientation="left">成功数据样本 (前 5 条)</Divider>
+            <pre
+              style={{
+                background: "#f5f5f5",
+                padding: 12,
+                borderRadius: 4,
+                fontSize: 12,
+              }}
+            >
+              {JSON.stringify(selectedLog.successData.slice(0, 5), null, 2)}
+            </pre>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
