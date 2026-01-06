@@ -4,6 +4,7 @@ import {
   getSchoolConfig,
 } from "../mapping/localAdapter";
 import { syncQueue } from "./syncQueue";
+import { EntityType } from "../types";
 
 /**
  * 自动调度器：扫描所有配置文件并注册 Cron 任务
@@ -32,7 +33,7 @@ export async function setupScheduler(filterTenantId?: string) {
   for (const tenantId of tenants) {
     const entities = getAvailableEntities(tenantId);
 
-    for (const entityType of entities) {
+    for (const entityType of entities as EntityType[]) {
       try {
         const config = await getSchoolConfig(tenantId, entityType);
 

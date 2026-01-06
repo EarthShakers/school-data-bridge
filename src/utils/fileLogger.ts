@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import dayjs from "dayjs";
+import { EntityType } from "../types";
 
 /**
  * 生成简短的文件名后缀：时间戳_短ID
@@ -17,7 +18,7 @@ function generateShortSuffix(traceId: string) {
  */
 export function saveImportResult(
   tenantId: string,
-  entityType: string,
+  entityType: EntityType,
   traceId: string,
   allRecords: any[]
 ) {
@@ -62,7 +63,7 @@ export function saveImportResult(
  */
 export function saveImportReport(
   tenantId: string,
-  entityType: string,
+  entityType: EntityType,
   traceId: string,
   report: any
 ) {

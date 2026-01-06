@@ -4,8 +4,9 @@ import { studentSchema } from "./student";
 import { teacherOrganizationsSchema } from "./teacherOrganizations";
 import { studentOrganizationsSchema } from "./studentOrganizations";
 import { classSchema } from "./class";
+import { EntityType } from "../../types";
 
-export const schemas: Record<string, z.ZodSchema> = {
+export const schemas: Record<EntityType, z.ZodSchema> = {
   teacher: teacherSchema,
   student: studentSchema,
   teacherOrganizations: teacherOrganizationsSchema,

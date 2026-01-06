@@ -1,12 +1,7 @@
 export interface SchoolConfig {
   tenantId: string;
   schoolName: string;
-  entityType:
-    | "teacher"
-    | "student"
-    | "teacherOrganizations"
-    | "studentOrganizations"
-    | "class";
+  entityType: EntityType;
   dataSource: ApiDataSource | DbDataSource | WebhookDataSource;
   fieldMap: FieldMapItem[];
   batchConfig: {
@@ -19,6 +14,13 @@ export interface SchoolConfig {
     priority?: number; // 优先级
   };
 }
+
+export type EntityType =
+  | "teacher"
+  | "student"
+  | "teacherOrganizations"
+  | "studentOrganizations"
+  | "class";
 
 export interface ApiDataSource {
   type: "api";

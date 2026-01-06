@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # 1. Redis 基础服务
+  redis:
+    image: redis:7-alpine
+    container_name: bridge-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  # 2. Web 管理控制台
+  web:
+    build: .
+    container_name: bridge-web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RUN_MODE=manual  # Web 模式通常只需要触发任务
+    depends_on:
+      - redis
+
+  # 3. Worker 消费者 (可以横向扩展)
+  worker:
+    build: .
+    container_name: bridge-worker
+    restart: always
+    environment:
+      - RUN_MODE=worker
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+    depends_on:
+      - redis
+    # 生产环境如果数据量大，可以增加多个 worker 容器
+    # deploy:
+    #   replicas: 2
+
+  # 4. Scheduler 调度器 (建议只跑一个，避免 Cron 重复触发)
+  scheduler:
+    build: .
+    container_name: bridge-scheduler
+    restart: always
+    environment:
+      - RUN_MODE=scheduler
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
+

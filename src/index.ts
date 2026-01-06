@@ -7,6 +7,7 @@ import {
 import { runSyncTask } from "./core/executor";
 import { setupScheduler } from "./queue/scheduler";
 import { addSyncJob } from "./queue/syncQueue";
+import { EntityType } from "./types";
 
 /**
  * 主入口：支持多种执行模式
@@ -67,7 +68,7 @@ async function pushToQueue(arg1: string, arg2?: string) {
     const availableEntities = getAvailableEntities(tenantId);
     const entitiesToRun = !arg2 || arg2 === "all" ? availableEntities : [arg2];
     for (const entityType of entitiesToRun) {
-      await addSyncJob(tenantId, entityType);
+      await addSyncJob(tenantId, entityType as EntityType);
     }
   }
 }

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import JSON5 from "json5";
-import { SchoolConfig } from "../../types";
+import { EntityType, SchoolConfig } from "../../types";
 
 const CONFIG_BASE_PATH = path.join(process.cwd(), "config", "schools");
 
@@ -10,7 +10,7 @@ const CONFIG_BASE_PATH = path.join(process.cwd(), "config", "schools");
  */
 export async function getSchoolConfig(
   tenantId: string,
-  entityType: string
+  entityType: EntityType
 ): Promise<SchoolConfig> {
   const configPath = path.join(
     CONFIG_BASE_PATH,

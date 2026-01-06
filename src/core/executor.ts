@@ -4,12 +4,13 @@ import { transformAndValidate } from "./pipeline";
 import { writeToInternalJavaService } from "../saveData/javaService";
 import { saveImportResult } from "../utils/fileLogger";
 import { baseConfig, getEndpointForEntity } from "../saveData/config";
+import { EntityType } from "../types";
 
 /**
  * 执行核心同步逻辑的函数
  * 支持自动分页循环：抓取一页 -> 转换一页 -> 写入一页
  */
-export async function runSyncTask(tenantId: string, entityType: string) {
+export async function runSyncTask(tenantId: string, entityType: EntityType) {
   console.log(
     `\n>>> [Executor] Starting Sync: Tenant=${tenantId}, Entity=${entityType}`
   );

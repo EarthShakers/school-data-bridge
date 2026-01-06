@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import { redisConnection, QUEUE_NAME } from "./connection";
+import { EntityType } from "../types";
 
 // 创建同步队列
 export const syncQueue = new Queue(QUEUE_NAME, {
@@ -26,7 +27,7 @@ export const syncQueue = new Queue(QUEUE_NAME, {
  */
 export async function addSyncJob(
   tenantId: string,
-  entityType: string,
+  entityType: EntityType,
   priority = 10
 ) {
   // 修复：为了支持同一个 租户:实体 连续触发多次显示，在 ID 后增加毫秒时间戳
