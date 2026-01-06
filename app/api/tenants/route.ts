@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       schoolName: "未命名学校",
       status: "active",
       commonConfig: {
+        dbType: "mysql",
         dbConnection: "",
         apiBaseUrl: "",
         apiAuthToken: "",

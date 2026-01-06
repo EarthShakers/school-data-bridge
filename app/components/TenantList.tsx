@@ -20,6 +20,8 @@ import {
   ArrowRightOutlined,
   PlusOutlined,
   EditOutlined,
+  CheckCircleFilled,
+  CloseCircleFilled,
 } from "@ant-design/icons";
 
 const { Text } = Typography;
@@ -42,10 +44,15 @@ export const TenantList: React.FC<TenantListProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [testingDb, setTestingDb] = useState(false);
+  const [testStatus, setTestStatus] = useState<"none" | "success" | "error">(
+    "none"
+  );
 
   // 打开新增或编辑 Modal
   const showModal = async (tenantId?: string) => {
     form.resetFields();
+    setTestStatus("none");
     if (tenantId) {
       setEditingTenantId(tenantId);
       // 优先填入 ID，防止 API 加载慢导致校验失败
@@ -63,6 +70,41 @@ export const TenantList: React.FC<TenantListProps> = ({
       form.setFieldsValue({ status: "active" });
     }
     setIsModalOpen(true);
+  };
+
+  const testDbConnection = async () => {
+    const dbType = form.getFieldValue(["commonConfig", "dbType"]);
+    const connectionString = form.getFieldValue([
+      "commonConfig",
+      "dbConnection",
+    ]);
+
+    if (!connectionString) {
+      return message.warning("请先输入数据库连接字符串");
+    }
+
+    setTestingDb(true);
+    setTestStatus("none");
+    try {
+      const res = await fetch("/api/test-db-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dbType, connectionString }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        message.success(data.message);
+        setTestStatus("success");
+      } else {
+        message.error(`连接失败: ${data.error}`);
+        setTestStatus("error");
+      }
+    } catch (err) {
+      message.error("请求失败，请稍后重试");
+      setTestStatus("error");
+    } finally {
+      setTestingDb(false);
+    }
   };
 
   const handleSave = async () => {
@@ -229,12 +271,74 @@ export const TenantList: React.FC<TenantListProps> = ({
             >
               <Input placeholder="https://api.school.edu" />
             </Form.Item>
-            <Form.Item
-              name={["commonConfig", "dbConnection"]}
-              label="数据库连接字符串 (JDBC/Connection URL)"
-            >
-              <Input placeholder="mysql://user:pass@host:3306/db" />
-            </Form.Item>
+
+            <Row gutter={16}>
+              <Col span={8}>
+                <Form.Item
+                  name={["commonConfig", "dbType"]}
+                  label="数据库类型"
+                  initialValue="mysql"
+                >
+                  <Select>
+                    <Select.Option value="mysql">MySQL</Select.Option>
+                    <Select.Option value="postgresql">PostgreSQL</Select.Option>
+                    <Select.Option value="sqlserver">SQL Server</Select.Option>
+                    <Select.Option value="oracle">Oracle</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={16}>
+                <Form.Item
+                  label="数据库连接字符串 (JDBC/Connection URL)"
+                  required
+                >
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <Input.Group compact style={{ flex: 1, display: "flex" }}>
+                      <Form.Item
+                        name={["commonConfig", "dbConnection"]}
+                        noStyle
+                        rules={[
+                          { required: true, message: "请输入连接字符串" },
+                        ]}
+                      >
+                        <Input
+                          style={{ flex: 1 }}
+                          placeholder="mysql://user:pass@host:3306/db"
+                        />
+                      </Form.Item>
+                      <Button
+                        style={{ width: "100px" }}
+                        type="dashed"
+                        loading={testingDb}
+                        onClick={testDbConnection}
+                      >
+                        测试连接
+                      </Button>
+                    </Input.Group>
+                    <div
+                      style={{
+                        width: "30px",
+                        marginLeft: "8px",
+                        display: "flex",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {testStatus === "success" && (
+                        <CheckCircleFilled
+                          style={{ color: "#52c41a", fontSize: "18px" }}
+                        />
+                      )}
+                      {testStatus === "error" && (
+                        <CloseCircleFilled
+                          style={{ color: "#ff4d4f", fontSize: "18px" }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </Form.Item>
+              </Col>
+            </Row>
+
             <Form.Item
               name={["commonConfig", "apiAuthToken"]}
               label="默认 Auth Token / API Key"
