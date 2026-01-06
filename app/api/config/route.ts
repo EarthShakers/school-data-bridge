@@ -16,7 +16,25 @@ export async function GET(request: Request) {
   const configPath = path.join(CONFIG_BASE_PATH, tenantId, `${entityType}.json5`);
 
   if (!fs.existsSync(configPath)) {
-    return NextResponse.json({ error: "Config not found" }, { status: 404 });
+    // 如果文件不存在，返回默认模板，而不是报错
+    const defaultTemplate = {
+      tenantId,
+      schoolName: "待配置租户",
+      entityType,
+      dataSource: {
+        type: "api",
+        config: {
+          url: `https://api.example.com/${entityType}`,
+          method: "GET",
+          params: {},
+          pagination: { pageParam: "page", sizeParam: "size", pageSize: 100 }
+        }
+      },
+      fieldMap: [{ sourceField: "id", targetField: "id", label: "ID" }],
+      batchConfig: { batchSize: 100, retryTimes: 3 },
+      syncConfig: { enabled: false, cron: "0 0 * * *" }
+    };
+    return NextResponse.json({ content: JSON.stringify(defaultTemplate, null, 2) });
   }
 
   try {
@@ -41,7 +59,32 @@ export async function POST(request: Request) {
     }
 
     const configPath = path.join(tenantPath, `${entityType}.json5`);
-    fs.writeFileSync(configPath, content, "utf-8");
+    
+    // 如果 content 为空字符串且文件不存在，可以初始化一个模板
+    let finalContent = content;
+    if (!content && !fs.existsSync(configPath)) {
+      finalContent = JSON.stringify({
+        tenantId,
+        schoolName: "新租户",
+        entityType,
+        dataSource: {
+          type: "api",
+          config: {
+            url: "https://api.example.com/data",
+            method: "GET",
+            params: {},
+            pagination: { pageParam: "page", sizeParam: "size", pageSize: 100 }
+          }
+        },
+        fieldMap: [
+          { sourceField: "id", targetField: "id", label: "ID" }
+        ],
+        batchConfig: { batchSize: 100, retryTimes: 3 },
+        syncConfig: { enabled: false, cron: "0 0 * * *" }
+      }, null, 2);
+    }
+
+    fs.writeFileSync(configPath, finalContent, "utf-8");
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

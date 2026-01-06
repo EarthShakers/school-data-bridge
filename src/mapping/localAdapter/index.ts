@@ -29,16 +29,11 @@ export async function getSchoolConfig(
 }
 
 /**
- * 获取租户下所有可用的实体类型
+ * 获取租户下所有可用的实体类型（固定返回 5 个标准实体）
  */
 export function getAvailableEntities(tenantId: string): string[] {
-  const tenantPath = path.join(CONFIG_BASE_PATH, tenantId);
-  if (!fs.existsSync(tenantPath)) return [];
-
-  return fs
-    .readdirSync(tenantPath)
-    .filter((file) => file.endsWith(".json5"))
-    .map((file) => file.replace(".json5", ""));
+  // 不再只根据磁盘文件返回，而是强制返回 5 个标准类型
+  return ["teacher", "student", "teacherOrganizations", "studentOrganizations", "class"];
 }
 
 /**

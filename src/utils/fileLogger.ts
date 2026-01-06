@@ -20,7 +20,12 @@ export function saveImportResult(
   tenantId: string,
   entityType: EntityType,
   traceId: string,
-  allRecords: any[]
+  allRecords: any[],
+  stageStats?: {
+    fetch: { total: number; status: string };
+    transform: { success: number; failed: number };
+    write: { success: number; failed: number };
+  }
 ) {
   const logDir = path.join(process.cwd(), "logs", "transformed", tenantId);
   if (!fs.existsSync(logDir)) {
@@ -35,6 +40,12 @@ export function saveImportResult(
       total: allRecords.length,
       success: successData.length,
       failed: failedData.length,
+    },
+    // 新增全流程阶段指标
+    stages: stageStats || {
+      fetch: { total: allRecords.length, status: "completed" },
+      transform: { success: successData.length, failed: failedData.length },
+      write: { success: 0, failed: 0 },
     },
     // 成功的数据（移除内部标识字段以保持干净）
     successData: successData.map(

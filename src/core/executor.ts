@@ -55,8 +55,12 @@ export async function runSyncTask(tenantId: string, entityType: EntityType) {
       const { allRecords, successCount, failedCount } =
         await transformAndValidate(envelope, currentConfig);
 
-      // 4. 保存本地日志 (Staging & Audit)
-      saveImportResult(tenantId, entityType, envelope.traceId, allRecords);
+      // 4. 统计阶段数据
+      const stageStats = {
+        fetch: { total: currentBatchSize, status: "success" },
+        transform: { success: successCount, failed: failedCount },
+        write: { success: 0, failed: 0 },
+      };
 
       // 5. 过滤出成功数据并准备写入
       const dataToWrite = allRecords
@@ -78,7 +82,17 @@ export async function runSyncTask(tenantId: string, entityType: EntityType) {
         );
         totalWritten += stats.success;
         totalFailed += stats.failed;
+        stageStats.write = { success: stats.success, failed: stats.failed };
       }
+
+      // 7. 保存本地日志 (包含全流程阶段指标)
+      saveImportResult(
+        tenantId,
+        entityType,
+        envelope.traceId,
+        allRecords,
+        stageStats
+      );
 
       totalProcessed += currentBatchSize;
       totalFailed += failedCount;

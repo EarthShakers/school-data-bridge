@@ -16,6 +16,8 @@ import {
   Empty,
   Typography,
   message,
+  Steps,
+  Progress,
 } from "antd";
 import {
   SettingOutlined,
@@ -232,7 +234,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       </Row>
 
       <Modal
-        title="同步执行详情"
+        title="同步执行全流程详情"
         open={logModalVisible}
         onCancel={() => setLogModalVisible(false)}
         footer={null}
@@ -240,15 +242,50 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       >
         {selectedLog && (
           <div>
-            <Descriptions title="执行概览" bordered size="small" column={3}>
-              <Descriptions.Item label="总数">
+            <div style={{ padding: "20px 0 40px" }}>
+              <Steps
+                current={3}
+                items={[
+                  {
+                    title: "数据抓取",
+                    description: `抓取总数: ${selectedLog.stages?.fetch?.total || 0}`,
+                    status: selectedLog.stages?.fetch?.status === "success" ? "finish" : "error",
+                  },
+                  {
+                    title: "数据转换与校验",
+                    description: (
+                      <div>
+                        <Text type="success">成功: {selectedLog.stages?.transform?.success || 0}</Text>
+                        <br />
+                        <Text type="danger">失败: {selectedLog.stages?.transform?.failed || 0}</Text>
+                      </div>
+                    ),
+                    status: (selectedLog.stages?.transform?.failed || 0) > 0 ? "error" : "finish",
+                  },
+                  {
+                    title: "写入 Java 服务",
+                    description: (
+                      <div>
+                        <Text type="success">写入: {selectedLog.stages?.write?.success || 0}</Text>
+                        <br />
+                        <Text type="danger">失败: {selectedLog.stages?.write?.failed || 0}</Text>
+                      </div>
+                    ),
+                    status: (selectedLog.stages?.write?.failed || 0) > 0 ? "error" : "finish",
+                  },
+                ]}
+              />
+            </div>
+
+            <Descriptions title="汇总统计" bordered size="small" column={3}>
+              <Descriptions.Item label="原始总数">
                 {selectedLog.summary.total}
               </Descriptions.Item>
-              <Descriptions.Item label="成功">
+              <Descriptions.Item label="通过校验">
                 {selectedLog.summary.success}
               </Descriptions.Item>
-              <Descriptions.Item label="失败">
-                {selectedLog.summary.failed}
+              <Descriptions.Item label="入库成功">
+                {selectedLog.stages?.write?.success || 0}
               </Descriptions.Item>
             </Descriptions>
 

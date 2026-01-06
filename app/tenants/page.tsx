@@ -9,11 +9,16 @@ export default function TenantsPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
+  const fetchTenants = () => {
+    setLoading(true);
     fetch("/api/tenants")
       .then((res) => res.json())
       .then((data) => setTenants(data.tenants || []))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchTenants();
   }, []);
 
   return (
@@ -25,6 +30,7 @@ export default function TenantsPage() {
         tenants={tenants}
         loading={loading}
         onSelectTenant={(id) => router.push(`/tenants/${id}`)}
+        onRefresh={fetchTenants}
       />
     </div>
   );
