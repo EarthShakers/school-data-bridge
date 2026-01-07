@@ -1,123 +1,94 @@
 import { NextResponse } from "next/server";
-import {
-  getAvailableTenants,
-  getAvailableEntities,
-} from "@/src/mapping/localAdapter";
-import fs from "fs";
-import path from "path";
-import JSON5 from "json5";
-
-const CONFIG_BASE_PATH = path.join(process.cwd(), "config", "schools");
+import { metadataDb } from "@/src/utils/metadataDb";
 
 export async function GET() {
   try {
-    const tenantIds = getAvailableTenants();
-    const tenants = tenantIds.map((tenantId) => {
-      const configPath = path.join(
-        CONFIG_BASE_PATH,
-        tenantId,
-        "tenantConfig.json5"
-      );
-      let tenantConfig = { schoolName: "未知学校", status: "unknown" };
+    // 明确映射数据库字段到前端期望的驼峰命名
+    const tenants = await metadataDb("bridge_tenants").select(
+      "tenant_id as tenantId",
+      "school_name as schoolName",
+      "status"
+    );
 
-      if (fs.existsSync(configPath)) {
-        try {
-          const content = fs.readFileSync(configPath, "utf-8");
-          // 修正：使用 JSON5 解析，防止因注释导致报错
-          const parsed = JSON5.parse(content);
-          tenantConfig = {
-            schoolName: parsed.schoolName || "未命名学校",
-            status: parsed.status || "active",
-          };
-        } catch (e) {}
-      }
-
-      return {
-        tenantId,
-        ...tenantConfig,
-        entities: getAvailableEntities(tenantId),
-      };
-    });
-
+    console.log(`[API Tenants] Fetched ${tenants.length} tenants from DB`);
     return NextResponse.json({ tenants });
   } catch (error: any) {
+    console.error("[API Tenants GET Error]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const { tenantId } = await request.json();
+    const { tenantId, schoolName, status, commonConfig } = await request.json();
+
     if (!tenantId) {
-      return NextResponse.json({ error: "租户 ID 不能为空" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tenant ID is required" },
+        { status: 400 }
+      );
     }
 
-    const tenantPath = path.join(CONFIG_BASE_PATH, tenantId);
-    if (fs.existsSync(tenantPath)) {
-      return NextResponse.json({ error: "租户已存在" }, { status: 400 });
+    // 1. 检查是否存在
+    const exists = await metadataDb("bridge_tenants")
+      .where({ tenant_id: tenantId })
+      .first();
+    if (exists) {
+      return NextResponse.json(
+        { error: `Tenant '${tenantId}' already exists.` },
+        { status: 409 }
+      );
     }
 
-    // 1. 创建租户目录
-    fs.mkdirSync(tenantPath, { recursive: true });
+    // 2. 创建租户记录
+    await metadataDb("bridge_tenants").insert({
+      tenant_id: tenantId,
+      school_name: schoolName || `新学校 (${tenantId})`,
+      status: status || "active",
+      common_config: JSON.stringify(
+        commonConfig || {
+          dbType: "mysql",
+          dbConnection: "",
+          apiBaseUrl: "",
+          apiAuthToken: "",
+        }
+      ),
+    });
 
-    // 2. 初始化租户全局配置 tenantConfig.json5
-    const tenantConfigPath = path.join(tenantPath, "tenantConfig.json5");
-    const defaultTenantConfig = {
-      tenantId,
-      schoolName: "未命名学校",
-      status: "active",
-      commonConfig: {
-        dbType: "mysql",
-        dbConnection: "",
-        apiBaseUrl: "",
-        apiAuthToken: "",
-      },
-      description: "新入驻租户",
-      createdAt: new Date().toISOString(),
-    };
-    fs.writeFileSync(
-      tenantConfigPath,
-      JSON.stringify(defaultTenantConfig, null, 2),
-      "utf-8"
-    );
-
-    // 3. 默认生成 5 个标准实体的配置文件
-    const defaultEntities = [
+    // 3. 默认生成 5 个标准实体的初始配置
+    const standardEntities = [
       "teacher",
       "student",
       "teacherOrganizations",
       "studentOrganizations",
       "class",
     ];
-
-    for (const entityType of defaultEntities) {
-      const configPath = path.join(tenantPath, `${entityType}.json5`);
-      const defaultContent = JSON.stringify(
-        {
-          tenantId,
-          schoolName: "新租户",
-          entityType,
-          dataSource: {
-            type: "db", // 默认显示为 DB 模式，方便用户看到数据库配置
-            config: {
-              dbType: "", // 留空，自动回退到租户级配置
-              connectionString: "", // 留空，自动回退到租户级配置
-              modelName: "YOUR_TABLE_NAME",
-              batchSize: 100,
-            },
+    for (const entityType of standardEntities) {
+      await metadataDb("bridge_entity_configs").insert({
+        tenant_id: tenantId,
+        entity_type: entityType,
+        data_source: JSON.stringify({
+          type: "db",
+          config: {
+            dbType: "",
+            connectionString: "",
+            modelName: "YourTableName",
+            batchSize: 100,
           },
-          fieldMap: [{ sourceField: "id", targetField: "id", label: "ID" }],
-          batchConfig: { batchSize: 100, retryTimes: 3 },
-          syncConfig: { enabled: false, cron: "0 0 * * *" },
-        },
-        null,
-        2
-      );
-      fs.writeFileSync(configPath, defaultContent, "utf-8");
+        }),
+        field_map: JSON.stringify([]),
+        batch_config: JSON.stringify({ batchSize: 100, retryTimes: 3 }),
+        sync_config: JSON.stringify({
+          enabled: false,
+          cron: "0 0 * * *",
+          priority: 10,
+        }),
+      });
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("[API Tenants POST Error]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

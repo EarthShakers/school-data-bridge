@@ -85,7 +85,10 @@ export async function runSyncTask(
           batchSize:
             config.batchConfig.batchSize || baseConfig.DEFAULT_BATCH_SIZE,
           concurrency: Math.max(1, baseConfig.MAX_GLOBAL_CONCURRENCY / 2),
-          javaEndpoint: getEndpointForEntity(config.entityType, environment),
+          javaEndpoint: await getEndpointForEntity(
+            config.entityType,
+            environment
+          ),
         });
         totalWritten += stats.success;
         finalStages.write.success += stats.success;

@@ -27,7 +27,7 @@ export async function setupScheduler(filterTenantId?: string) {
   }
 
   // 2. 遍历指定租户或所有租户
-  const tenants = filterTenantId ? [filterTenantId] : getAvailableTenants();
+  const tenants = filterTenantId ? [filterTenantId] : await getAvailableTenants();
   let count = 0;
 
   for (const tenantId of tenants) {

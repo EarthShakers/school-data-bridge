@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { metadataDb } from "@/src/utils/metadataDb";
+import JSON5 from "json5";
 
-const CONFIG_BASE_PATH = path.join(process.cwd(), "config", "schools");
-
+// GET /api/config?tenantId=xxx&entityType=yyy
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const tenantId = searchParams.get("tenantId");
@@ -13,82 +12,50 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
   }
 
-  const configPath = path.join(CONFIG_BASE_PATH, tenantId, `${entityType}.json5`);
-
-  if (!fs.existsSync(configPath)) {
-    // 如果文件不存在，返回默认模板，而不是报错
-    const defaultTemplate = {
-      tenantId,
-      schoolName: "待配置租户",
-      entityType,
-      dataSource: {
-        type: "api",
-        config: {
-          url: `https://api.example.com/${entityType}`,
-          method: "GET",
-          params: {},
-          pagination: { pageParam: "page", sizeParam: "size", pageSize: 100 }
-        }
-      },
-      fieldMap: [{ sourceField: "id", targetField: "id", label: "ID" }],
-      batchConfig: { batchSize: 100, retryTimes: 3 },
-      syncConfig: { enabled: false, cron: "0 0 * * *" }
-    };
-    return NextResponse.json({ content: JSON.stringify(defaultTemplate, null, 2) });
-  }
-
   try {
-    const content = fs.readFileSync(configPath, "utf-8");
-    return NextResponse.json({ content });
+    const row = await metadataDb("bridge_entity_configs")
+      .where({ tenant_id: tenantId, entity_type: entityType })
+      .first();
+
+    if (row) {
+      // 组装回原本的 SchoolConfig 结构（用于编辑器显示）
+      const config = {
+        tenantId: row.tenant_id,
+        entityType: row.entity_type,
+        dataSource: row.data_source,
+        fieldMap: row.field_map,
+        batchConfig: row.batch_config,
+        syncConfig: row.sync_config,
+      };
+      return NextResponse.json({ content: JSON.stringify(config, null, 2) });
+    } else {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
+// POST /api/config (保存配置)
 export async function POST(request: Request) {
   try {
     const { tenantId, entityType, content } = await request.json();
+    const config = JSON5.parse(content);
 
-    if (!tenantId || !entityType || content === undefined) {
-      return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
-    }
-
-    const tenantPath = path.join(CONFIG_BASE_PATH, tenantId);
-    if (!fs.existsSync(tenantPath)) {
-      fs.mkdirSync(tenantPath, { recursive: true });
-    }
-
-    const configPath = path.join(tenantPath, `${entityType}.json5`);
-    
-    // 如果 content 为空字符串且文件不存在，可以初始化一个模板
-    let finalContent = content;
-    if (!content && !fs.existsSync(configPath)) {
-      finalContent = JSON.stringify({
-        tenantId,
-        schoolName: "新租户",
-        entityType,
-        dataSource: {
-          type: "api",
-          config: {
-            url: "https://api.example.com/data",
-            method: "GET",
-            params: {},
-            pagination: { pageParam: "page", sizeParam: "size", pageSize: 100 }
-          }
-        },
-        fieldMap: [
-          { sourceField: "id", targetField: "id", label: "ID" }
-        ],
-        batchConfig: { batchSize: 100, retryTimes: 3 },
-        syncConfig: { enabled: false, cron: "0 0 * * *" }
-      }, null, 2);
-    }
-
-    fs.writeFileSync(configPath, finalContent, "utf-8");
+    await metadataDb("bridge_entity_configs")
+      .insert({
+        tenant_id: tenantId,
+        entity_type: entityType,
+        data_source: JSON.stringify(config.dataSource),
+        field_map: JSON.stringify(config.fieldMap),
+        batch_config: JSON.stringify(config.batchConfig || {}),
+        sync_config: JSON.stringify(config.syncConfig || {}),
+      })
+      .onConflict(["tenant_id", "entity_type"])
+      .merge();
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

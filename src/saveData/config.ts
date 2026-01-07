@@ -1,7 +1,5 @@
-import fs from "fs";
-import path from "path";
-import JSON5 from "json5";
 import { EntityType } from "../types";
+import { metadataDb } from "../utils/metadataDb";
 
 export interface EnvironmentConfig {
   id: string;
@@ -9,53 +7,25 @@ export interface EnvironmentConfig {
   url: string;
 }
 
-const SYSTEM_CONFIG_PATH = path.join(
-  process.cwd(),
-  "config",
-  "systemConfig.json5"
-);
-
 /**
- * 获取实时环境配置列表
+ * 获取实时环境配置列表（从数据库读取）
  */
-export function getSystemEnvironments(): EnvironmentConfig[] {
-  const defaultEnvs: EnvironmentConfig[] = [
-    {
-      id: "dev",
-      name: "开发环境 (Dev)",
-      url:
-        process.env.JAVA_USER_SERVICE_BASE_URL_DEV || "http://localhost:8080",
-    },
-    {
-      id: "test",
-      name: "测试环境 (Test)",
-      url:
-        process.env.JAVA_USER_SERVICE_BASE_URL_TEST ||
-        "http://test-api.example.com",
-    },
-    {
-      id: "prod",
-      name: "生产环境 (Prod)",
-      url:
-        process.env.JAVA_USER_SERVICE_BASE_URL_PROD ||
-        "https://api.example.com",
-    },
-  ];
-
-  if (fs.existsSync(SYSTEM_CONFIG_PATH)) {
-    try {
-      const content = fs.readFileSync(SYSTEM_CONFIG_PATH, "utf-8");
-      const config = JSON5.parse(content);
-      if (Array.isArray(config.environments)) {
-        return config.environments;
-      }
-    } catch (e) {
-      console.warn(
-        "[Config] Failed to parse systemConfig.json5, using defaults."
-      );
+export async function getSystemEnvironments(): Promise<EnvironmentConfig[]> {
+  try {
+    const envs = await metadataDb("bridge_system_environments").select("*");
+    if (envs && envs.length > 0) {
+      return envs;
     }
+  } catch (e) {
+    console.error("[Config] Failed to fetch environments from DB:", e);
   }
-  return defaultEnvs;
+
+  // 回退默认值
+  return [
+    { id: "dev", name: "开发环境 (Dev)", url: process.env.JAVA_USER_SERVICE_BASE_URL_DEV || "http://localhost:8080" },
+    { id: "test", name: "测试环境 (Test)", url: process.env.JAVA_USER_SERVICE_BASE_URL_TEST || "http://test-api.example.com" },
+    { id: "prod", name: "生产环境 (Prod)", url: process.env.JAVA_USER_SERVICE_BASE_URL_PROD || "https://api.example.com" },
+  ];
 }
 
 export const baseConfig = {
@@ -71,12 +41,12 @@ export const baseConfig = {
 /**
  * 根据实体类型和目标环境 ID 获取 Java 写入接口地址
  */
-export function getEndpointForEntity(
+export async function getEndpointForEntity(
   entityType: EntityType,
   envId: string = "dev"
-): string {
-  const envs = getSystemEnvironments();
-  const targetEnv = envs.find((e) => e.id === envId) || envs[0];
+): Promise<string> {
+  const envs = await getSystemEnvironments();
+  const targetEnv = envs.find(e => e.id === envId) || envs[0];
   const base = targetEnv.url;
 
   const map: Record<EntityType, string> = {

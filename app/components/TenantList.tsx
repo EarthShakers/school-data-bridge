@@ -117,28 +117,29 @@ export const TenantList: React.FC<TenantListProps> = ({
         const createRes = await fetch("/api/tenants", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tenantId: values.tenantId }),
+          body: JSON.stringify(values), // 👈 传整个 values 过去
         });
         if (!createRes.ok) {
           const err = await createRes.json();
           throw new Error(err.error || "创建租户失败");
         }
-      }
-
-      // 保存详情配置
-      const saveRes = await fetch("/api/tenant-detail", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-
-      if (saveRes.ok) {
-        message.success(editingTenantId ? "更新成功" : "创建并初始化成功");
-        setIsModalOpen(false);
-        onRefresh();
       } else {
-        message.error("保存详情失败");
+        // 如果是编辑，才单独调用 detail 保存
+        const saveRes = await fetch("/api/tenant-detail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values),
+        });
+
+        if (!saveRes.ok) {
+          message.error("保存详情失败");
+          return;
+        }
       }
+
+      message.success(editingTenantId ? "更新成功" : "创建并初始化成功");
+      setIsModalOpen(false);
+      onRefresh();
     } catch (err: any) {
       message.error(err.message || "操作失败");
     } finally {

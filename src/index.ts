@@ -51,7 +51,8 @@ async function main() {
   // 默认：手动/立即执行模式
   if (!arg1) {
     console.log("Usage: npm start <tenantId|all> [entityType|all]");
-    console.log("Available Tenants:", getAvailableTenants().join(", "));
+    const tenants = await getAvailableTenants();
+    console.log("Available Tenants:", tenants.join(", "));
     return;
   }
 
@@ -63,7 +64,7 @@ async function main() {
  * 推送任务到 BullMQ 队列
  */
 async function pushToQueue(arg1: string, arg2?: string) {
-  const tenants = arg1 === "all" ? getAvailableTenants() : [arg1];
+  const tenants = arg1 === "all" ? await getAvailableTenants() : [arg1];
   for (const tenantId of tenants) {
     const availableEntities = getAvailableEntities(tenantId);
     const entitiesToRun = !arg2 || arg2 === "all" ? availableEntities : [arg2];
@@ -77,7 +78,7 @@ async function pushToQueue(arg1: string, arg2?: string) {
  * 立即执行同步（原有逻辑）
  */
 async function runImmediately(arg1: string, arg2?: string) {
-  const tenants = arg1 === "all" ? getAvailableTenants() : [arg1];
+  const tenants = arg1 === "all" ? await getAvailableTenants() : [arg1];
   for (const tenantId of tenants) {
     const availableEntities = getAvailableEntities(tenantId);
     const entitiesToRun = !arg2 || arg2 === "all" ? availableEntities : [arg2];
