@@ -24,8 +24,11 @@ import {
   SaveOutlined,
   SyncOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
+import Editor from "@monaco-editor/react";
 import dayjs from "dayjs";
+import JSON5 from "json5";
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
@@ -178,23 +181,54 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
               </span>
             }
             extra={
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                onClick={saveConfig}
-                loading={loadingConfig}
-              >
-                保存配置
-              </Button>
+              <Space>
+                <Button
+                  icon={<FileTextOutlined />}
+                  onClick={() => {
+                    try {
+                      const json = JSON5.parse(config);
+                      setConfig(JSON.stringify(json, null, 2));
+                    } catch (e: any) {
+                      message.warning("无法格式化：" + e.message);
+                    }
+                  }}
+                >
+                  格式化
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  onClick={saveConfig}
+                  loading={loadingConfig}
+                >
+                  保存配置
+                </Button>
+              </Space>
             }
           >
-            <TextArea
-              value={config}
-              onChange={(e) => setConfig(e.target.value)}
-              rows={20}
-              style={{ fontFamily: "monospace", fontSize: "12px" }}
-              placeholder="请输入配置内容..."
-            />
+            <div
+              style={{
+                border: "1px solid #d9d9d9",
+                borderRadius: "4px",
+                overflow: "hidden",
+              }}
+            >
+              <Editor
+                height="600px"
+                language="json"
+                value={config}
+                theme="light"
+                onChange={(value) => setConfig(value || "")}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  tabSize: 2,
+                  formatOnPaste: true,
+                }}
+              />
+            </div>
           </Card>
         </Col>
         <Col span={10}>

@@ -1,50 +1,45 @@
 {
-  entityType: "student",
-  dataSource: {
-    type: "db",
-    config: {
-      // 方式 1：直接使用视图名（推荐，解耦 SQL 逻辑）
-      viewName: "User",
-      // 方式 2：使用 ORM 模型名称
-      // modelName: "User",
-      // 方式 3：手动指定 SQL（如果无法创建视图）
-      // sql: "SELECT id as STU_ID, name as STU_NAME FROM students WHERE status = 1",
-      batchSize: 100, // 👈 每次从 DB 抓取的数量
-    },
+  "entityType": "student",
+  "dataSource": {
+    "type": "db",
+    "config": {
+      "viewName": "User",
+      "batchSize": 100
+    }
   },
-  fieldMap: [
+  "fieldMap": [
     {
-      sourceField: "id",
-      targetField: "id",
-      converter: "default",
-      required: true,
+      "sourceField": "id",
+      "targetField": "id",
+      "converter": "default",
+      "required": true
     },
     {
-      sourceField: "name",
-      targetField: "name",
-      converter: "default",
-      required: true,
+      "sourceField": "name",
+      "targetField": "name",
+      "converter": "default",
+      "required": true
     },
     {
-      sourceField: "email",
-      targetField: "code",
-      converter: "default",
-      required: true,
+      "sourceField": "email",
+      "targetField": "code",
+      "converter": "default",
+      "required": true
     },
     {
-      sourceField: "classId",
-      targetField: "classId",
-      converter: "default",
-      required: true,
+      "sourceField": "classId",
+      "targetField": "classId",
+      "converter": "default",
+      "required": true
     }
   ],
-  batchConfig: {
-    batchSize: 500,
-    retryTimes: 3,
+  "batchConfig": {
+    "batchSize": 500,
+    "retryTimes": 3
   },
-  syncConfig: {
-    enabled: true,
-    cron: "0 2 * * *", // 每天凌晨2点同步
-    priority: 10,
-  },
+  "syncConfig": {
+    "enabled": true,
+    "cron": "0 2 * * *",
+    "priority": 10
+  }
 }
