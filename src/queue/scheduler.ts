@@ -39,11 +39,15 @@ export async function setupScheduler(filterTenantId?: string) {
 
         // 如果配置了 syncConfig 且开启了同步
         if (config.syncConfig?.enabled && config.syncConfig.cron) {
-          const { cron, priority = 10 } = config.syncConfig;
+          const {
+            cron,
+            priority = 10,
+            environment = "prod",
+          } = config.syncConfig;
 
           await syncQueue.add(
             "sync-task",
-            { tenantId, entityType },
+            { tenantId, entityType, environment },
             {
               repeat: { pattern: cron },
               priority,
@@ -52,7 +56,7 @@ export async function setupScheduler(filterTenantId?: string) {
           );
 
           console.log(
-            `[Scheduler] 📅 Registered Cron: ${tenantId}:${entityType} -> "${cron}"`
+            `[Scheduler] 📅 Registered Cron: ${tenantId}:${entityType} -> "${cron}" (Env: ${environment})`
           );
           count++;
         }

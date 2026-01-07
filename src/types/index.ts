@@ -1,3 +1,5 @@
+import { TargetEnvironment } from "../saveData/config";
+
 export interface SchoolConfig {
   tenantId: string;
   schoolName: string;
@@ -12,6 +14,7 @@ export interface SchoolConfig {
     enabled?: boolean;
     cron?: string; // Cron 表达式，如 "0 2 * * *"
     priority?: number; // 优先级
+    environment?: TargetEnvironment; // 自动调度时的目标环境
   };
 }
 

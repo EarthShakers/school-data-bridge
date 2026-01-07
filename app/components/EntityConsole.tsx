@@ -6,7 +6,6 @@ import {
   Row,
   Col,
   Button,
-  Input,
   Table,
   Badge,
   Space,
@@ -17,7 +16,7 @@ import {
   Typography,
   message,
   Steps,
-  Progress,
+  Select,
 } from "antd";
 import {
   SettingOutlined,
@@ -25,13 +24,14 @@ import {
   SyncOutlined,
   HistoryOutlined,
   FileTextOutlined,
+  CloudServerOutlined,
 } from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
 import dayjs from "dayjs";
 import JSON5 from "json5";
 
-const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
+const { Option } = Select;
 
 interface EntityConsoleProps {
   tenantId: string;
@@ -48,6 +48,20 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [logModalVisible, setLogModalVisible] = useState(false);
+  const [targetEnv, setTargetEnv] = useState<string | undefined>(undefined);
+  const [envs, setEnvs] = useState<any[]>([]);
+
+  const fetchEnvs = async () => {
+    try {
+      const res = await fetch("/api/system-config");
+      const data = await res.json();
+      if (data.environments) {
+        setEnvs(data.environments);
+      }
+    } catch (e) {
+      console.error("Failed to fetch envs");
+    }
+  };
 
   const fetchConfig = async () => {
     setLoadingConfig(true);
@@ -107,16 +121,21 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   };
 
   const handleSync = async () => {
-    message.loading(`正在触发同步...`, 0);
+    if (!targetEnv) {
+      message.warning("请先选择目标环境");
+      return;
+    }
+
+    message.loading(`正在触发同步 [${targetEnv}]...`, 0);
     try {
       const res = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId, entityType }),
+        body: JSON.stringify({ tenantId, entityType, environment: targetEnv }),
       });
       message.destroy();
       if (res.ok) {
-        message.success("同步任务已加入队列");
+        message.success(`同步任务 [${targetEnv}] 已加入队列`);
         setTimeout(fetchLogs, 2000);
       } else {
         message.error("任务触发失败");
@@ -130,8 +149,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   useEffect(() => {
     fetchConfig();
     fetchLogs();
+    fetchEnvs();
 
-    // 设置自动刷新：每 10 秒更新一次日志列表
     const timer = setInterval(() => {
       fetchLogs();
     }, 10000);
@@ -240,6 +259,23 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
             }
             style={{ marginBottom: 24 }}
           >
+            <div style={{ marginBottom: 16 }}>
+              <Text strong style={{ display: "block", marginBottom: 8 }}>
+                <CloudServerOutlined /> 目标写入环境:
+              </Text>
+              <Select
+                placeholder="请选择 Java 服务环境"
+                style={{ width: "100%" }}
+                value={targetEnv}
+                onChange={setTargetEnv}
+              >
+                {envs.map((env) => (
+                  <Option key={env.id} value={env.id}>
+                    {env.name}
+                  </Option>
+                ))}
+              </Select>
+            </div>
             <Paragraph>
               <Text type="secondary">配置修改后请先点击保存，再执行同步。</Text>
             </Paragraph>
@@ -249,6 +285,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
               icon={<SyncOutlined />}
               block
               size="large"
+              disabled={!targetEnv}
               onClick={handleSync}
             >
               立即执行手动同步

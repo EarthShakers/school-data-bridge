@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import { redisConnection, QUEUE_NAME } from "./connection";
 import { EntityType } from "../types";
+import { TargetEnvironment } from "../saveData/config";
 
 // 创建同步队列
 export const syncQueue = new Queue(QUEUE_NAME, {
@@ -28,6 +29,7 @@ export const syncQueue = new Queue(QUEUE_NAME, {
 export async function addSyncJob(
   tenantId: string,
   entityType: EntityType,
+  environment: TargetEnvironment = "dev",
   priority = 10
 ) {
   // 修复：为了支持同一个 租户:实体 连续触发多次显示，在 ID 后增加毫秒时间戳
@@ -35,8 +37,8 @@ export async function addSyncJob(
   const jobId = `manual-${tenantId}-${entityType}-${timestamp}`;
   await syncQueue.add(
     "sync-task",
-    { tenantId, entityType },
+    { tenantId, entityType, environment },
     { jobId, priority }
   );
-  console.log(`[Queue] 📥 Job added: ${jobId}`);
+  console.log(`[Queue] 📥 Job added: ${jobId} (Env: ${environment})`);
 }

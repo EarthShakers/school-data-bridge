@@ -10,9 +10,13 @@ import { EntityType } from "../types";
  * 执行核心同步逻辑的函数
  * 支持自动分页循环：抓取一页 -> 转换一页 -> 写入一页
  */
-export async function runSyncTask(tenantId: string, entityType: EntityType) {
+export async function runSyncTask(
+  tenantId: string,
+  entityType: EntityType,
+  environment: string = "dev"
+) {
   console.log(
-    `\n>>> [Executor] Starting Sync: Tenant=${tenantId}, Entity=${entityType}`
+    `\n>>> [Executor] Starting Sync: Tenant=${tenantId}, Entity=${entityType}, Env=${environment}`
   );
 
   let totalProcessed = 0;
@@ -81,7 +85,7 @@ export async function runSyncTask(tenantId: string, entityType: EntityType) {
           batchSize:
             config.batchConfig.batchSize || baseConfig.DEFAULT_BATCH_SIZE,
           concurrency: Math.max(1, baseConfig.MAX_GLOBAL_CONCURRENCY / 2),
-          javaEndpoint: getEndpointForEntity(config.entityType),
+          javaEndpoint: getEndpointForEntity(config.entityType, environment),
         });
         totalWritten += stats.success;
         finalStages.write.success += stats.success;

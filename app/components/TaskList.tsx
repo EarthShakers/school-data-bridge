@@ -36,7 +36,9 @@ export const TaskList: React.FC<TaskListProps> = ({
   const jobs = taskData?.jobs || [];
 
   // 获取所有可用的实体类型用于过滤
-  const uniqueEntities = Array.from(new Set(jobs.map(j => j.data?.entityType))).filter(Boolean);
+  const uniqueEntities = Array.from(
+    new Set(jobs.map((j) => j.data?.entityType))
+  ).filter(Boolean);
 
   const columns: any = [
     {
@@ -51,14 +53,21 @@ export const TaskList: React.FC<TaskListProps> = ({
       key: "tenantId",
       render: (record: any) => record.data?.tenantId || "-",
       // 租户搜索过滤
-      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => (
+      filterDropdown: ({
+        setSelectedKeys,
+        selectedKeys,
+        confirm,
+        clearFilters,
+      }: any) => (
         <div style={{ padding: 8 }}>
           <Input
             placeholder="搜索租户 ID"
             value={selectedKeys[0]}
-            onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+            onChange={(e) =>
+              setSelectedKeys(e.target.value ? [e.target.value] : [])
+            }
             onPressEnter={() => confirm()}
-            style={{ width: 188, marginBottom: 8, display: 'block' }}
+            style={{ width: 188, marginBottom: 8, display: "block" }}
           />
           <Space>
             <Button
@@ -70,23 +79,42 @@ export const TaskList: React.FC<TaskListProps> = ({
             >
               搜索
             </Button>
-            <Button onClick={() => clearFilters()} size="small" style={{ width: 90 }}>
+            <Button
+              onClick={() => clearFilters()}
+              size="small"
+              style={{ width: 90 }}
+            >
               重置
             </Button>
           </Space>
         </div>
       ),
-      filterIcon: (filtered: boolean) => <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />,
+      filterIcon: (filtered: boolean) => (
+        <SearchOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
+      ),
       onFilter: (value: string, record: any) =>
-        record.data?.tenantId?.toString().toLowerCase().includes(value.toLowerCase()),
+        record.data?.tenantId
+          ?.toString()
+          .toLowerCase()
+          .includes(value.toLowerCase()),
     },
     {
       title: "实体类型",
       key: "entityType",
-      render: (record: any) => <Badge status="default" text={record.data?.entityType || "-"} />,
+      render: (record: any) => (
+        <Badge status="default" text={record.data?.entityType || "-"} />
+      ),
       // 实体类型筛选
-      filters: uniqueEntities.map(e => ({ text: e, value: e })),
-      onFilter: (value: string, record: any) => record.data?.entityType === value,
+      filters: uniqueEntities.map((e) => ({ text: e, value: e })),
+      onFilter: (value: string, record: any) =>
+        record.data?.entityType === value,
+    },
+    {
+      title: "目标环境",
+      key: "environment",
+      render: (record: any) => record.data?.environment || "-",
+      onFilter: (value: string, record: any) =>
+        record.data?.environment === value,
     },
     {
       title: "状态",
@@ -103,10 +131,10 @@ export const TaskList: React.FC<TaskListProps> = ({
         return <Badge status={colorMap[status]} text={status} />;
       },
       filters: [
-        { text: 'active', value: 'active' },
-        { text: 'waiting', value: 'waiting' },
-        { text: 'completed', value: 'completed' },
-        { text: 'failed', value: 'failed' },
+        { text: "active", value: "active" },
+        { text: "waiting", value: "waiting" },
+        { text: "completed", value: "completed" },
+        { text: "failed", value: "failed" },
       ],
       onFilter: (value: string, record: any) => record.status === value,
     },

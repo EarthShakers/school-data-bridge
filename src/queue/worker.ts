@@ -6,11 +6,15 @@ import { runSyncTask } from "../core/executor";
 export const syncWorker = new Worker(
   QUEUE_NAME,
   async (job: Job) => {
-    const { tenantId, entityType } = job.data;
-    console.log(`[Worker] 🛠 Processing Job ${job.id}: ${tenantId}-${entityType}`);
-    
+    const { tenantId, entityType, environment } = job.data;
+    console.log(
+      `[Worker] 🛠 Processing Job ${job.id}: ${tenantId}-${entityType} (Env: ${
+        environment || "dev"
+      })`
+    );
+
     // 执行实际的同步逻辑
-    return await runSyncTask(tenantId, entityType);
+    return await runSyncTask(tenantId, entityType, environment);
   },
   {
     connection: redisConnection,
@@ -27,4 +31,3 @@ syncWorker.on("failed", (job, err) => {
 });
 
 console.log(`[Worker] 🚀 Sync Worker started and waiting for jobs...`);
-
