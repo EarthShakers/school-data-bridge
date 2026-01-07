@@ -57,11 +57,25 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
 
   const client = clientMap[dbType] || dbType;
 
+  // 智能识别连接参数：可能是字符串，也可能是包含 Host/User 的对象
+  let connectionConfig: any = connectionString;
+  
+  // 如果没有 connectionString 但有分项参数（这通常来自合并后的配置）
+  if (!connectionString && (config as any).dbHost) {
+    const c = config as any;
+    connectionConfig = {
+      host: c.dbHost,
+      port: Number(c.dbPort),
+      user: c.dbUser,
+      password: c.dbPass,
+      database: c.dbName,
+    };
+  }
+
   // 创建临时连接池
   const db = knex({
     client,
-    connection: connectionString,
-    // 对于这类同步工具，不需要常驻连接池，抓完即走
+    connection: connectionConfig,
     pool: { min: 0, max: 1 },
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   Table,
@@ -15,6 +15,7 @@ import {
   Space,
   Row,
   Col,
+  Alert,
 } from "antd";
 import {
   ArrowRightOutlined,
@@ -45,51 +46,74 @@ export const TenantList: React.FC<TenantListProps> = ({
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [testingDb, setTestingDb] = useState(false);
-  const [testStatus, setTestStatus] = useState<"none" | "success" | "error">(
-    "none"
+  const [testStatus, setTestStatus] = useState<"idle" | "success" | "error">(
+    "idle"
   );
 
-  // 打开新增或编辑 Modal
   const showModal = async (tenantId?: string) => {
     form.resetFields();
-    setTestStatus("none");
+    setTestStatus("idle");
     if (tenantId) {
       setEditingTenantId(tenantId);
-      // 优先填入 ID，防止 API 加载慢导致校验失败
       form.setFieldsValue({ tenantId });
       try {
         const res = await fetch(`/api/tenant-detail?tenantId=${tenantId}`);
         const data = await res.json();
-        // 合并 API 返回的其他配置（如 schoolName, commonConfig 等）
-        form.setFieldsValue(data);
+        // 自动识别连接模式
+        const commonConfig = data.commonConfig || {};
+        const connMode = commonConfig.dbHost ? "params" : "string";
+        form.setFieldsValue({
+          ...data,
+          commonConfig: { ...commonConfig, connMode },
+        });
       } catch (err) {
         message.error("加载租户配置失败");
       }
     } else {
       setEditingTenantId(null);
-      form.setFieldsValue({ status: "active" });
+      form.setFieldsValue({
+        status: "active",
+        commonConfig: { dbType: "mysql", connMode: "string" },
+      });
     }
     setIsModalOpen(true);
   };
 
   const testDbConnection = async () => {
-    const dbType = form.getFieldValue(["commonConfig", "dbType"]);
-    const connectionString = form.getFieldValue([
-      "commonConfig",
-      "dbConnection",
-    ]);
+    setTestStatus("idle");
+    const commonConfig = form.getFieldValue("commonConfig");
+    const {
+      dbType,
+      connMode,
+      dbConnection,
+      dbHost,
+      dbPort,
+      dbUser,
+      dbPass,
+      dbName,
+    } = commonConfig;
 
-    if (!connectionString) {
-      return message.warning("请先输入数据库连接字符串");
+    let connectionInfo: any = dbConnection;
+    if (connMode === "params") {
+      if (!dbHost || !dbPort || !dbName)
+        return message.warning("请完善数据库连接信息");
+      connectionInfo = {
+        host: dbHost,
+        port: dbPort,
+        user: dbUser,
+        password: dbPass,
+        database: dbName,
+      };
+    } else {
+      if (!dbConnection) return message.warning("请先输入数据库连接字符串");
     }
 
     setTestingDb(true);
-    setTestStatus("none");
     try {
       const res = await fetch("/api/test-db-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dbType, connectionString }),
+        body: JSON.stringify({ dbType, connection: connectionInfo }),
       });
       const data = await res.json();
       if (data.success) {
@@ -112,29 +136,23 @@ export const TenantList: React.FC<TenantListProps> = ({
       const values = await form.validateFields();
       setConfirmLoading(true);
 
-      // 如果是新增租户
       if (!editingTenantId) {
         const createRes = await fetch("/api/tenants", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values), // 👈 传整个 values 过去
+          body: JSON.stringify(values),
         });
         if (!createRes.ok) {
           const err = await createRes.json();
           throw new Error(err.error || "创建租户失败");
         }
       } else {
-        // 如果是编辑，才单独调用 detail 保存
         const saveRes = await fetch("/api/tenant-detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(values),
         });
-
-        if (!saveRes.ok) {
-          message.error("保存详情失败");
-          return;
-        }
+        if (!saveRes.ok) throw new Error("保存详情失败");
       }
 
       message.success(editingTenantId ? "更新成功" : "创建并初始化成功");
@@ -214,7 +232,7 @@ export const TenantList: React.FC<TenantListProps> = ({
         onOk={handleSave}
         onCancel={() => setIsModalOpen(false)}
         confirmLoading={confirmLoading}
-        width={700}
+        width={800}
         okText="保存"
         cancelText="取消"
       >
@@ -225,10 +243,7 @@ export const TenantList: React.FC<TenantListProps> = ({
                 name="tenantId"
                 label="租户 ID (唯一标识)"
                 rules={[
-                  {
-                    required: !editingTenantId,
-                    message: "请输入租户 ID",
-                  },
+                  { required: !editingTenantId, message: "请输入租户 ID" },
                 ]}
               >
                 <Input
@@ -273,13 +288,9 @@ export const TenantList: React.FC<TenantListProps> = ({
               <Input placeholder="https://api.school.edu" />
             </Form.Item>
 
-            <Row gutter={16}>
+            <Row gutter={16} align="middle">
               <Col span={8}>
-                <Form.Item
-                  name={["commonConfig", "dbType"]}
-                  label="数据库类型"
-                  initialValue="mysql"
-                >
+                <Form.Item name={["commonConfig", "dbType"]} label="数据库类型">
                   <Select>
                     <Select.Option value="mysql">MySQL</Select.Option>
                     <Select.Option value="postgresql">PostgreSQL</Select.Option>
@@ -288,57 +299,110 @@ export const TenantList: React.FC<TenantListProps> = ({
                   </Select>
                 </Form.Item>
               </Col>
-              <Col span={16}>
-                <Form.Item
-                  label="数据库连接字符串 (JDBC/Connection URL)"
-                  required
-                >
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <Input.Group compact style={{ flex: 1, display: "flex" }}>
-                      <Form.Item
-                        name={["commonConfig", "dbConnection"]}
-                        noStyle
-                        rules={[
-                          { required: true, message: "请输入连接字符串" },
-                        ]}
-                      >
-                        <Input
-                          style={{ flex: 1 }}
-                          placeholder="mysql://user:pass@host:3306/db"
-                        />
-                      </Form.Item>
-                      <Button
-                        style={{ width: "100px" }}
-                        type="dashed"
-                        loading={testingDb}
-                        onClick={testDbConnection}
-                      >
-                        测试连接
-                      </Button>
-                    </Input.Group>
-                    <div
-                      style={{
-                        width: "30px",
-                        marginLeft: "8px",
-                        display: "flex",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {testStatus === "success" && (
-                        <CheckCircleFilled
-                          style={{ color: "#52c41a", fontSize: "18px" }}
-                        />
-                      )}
-                      {testStatus === "error" && (
-                        <CloseCircleFilled
-                          style={{ color: "#ff4d4f", fontSize: "18px" }}
-                        />
-                      )}
-                    </div>
-                  </div>
+              <Col span={8}>
+                <Form.Item name={["commonConfig", "connMode"]} label="连接模式">
+                  <Select>
+                    <Select.Option value="string">
+                      连接字符串 (URL)
+                    </Select.Option>
+                    <Select.Option value="params">
+                      分项参数 (Host/Port)
+                    </Select.Option>
+                  </Select>
                 </Form.Item>
               </Col>
+              <Col
+                span={8}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginTop: 8, // 抵消 Form.Item label 的大概高度
+                }}
+              >
+                <Space>
+                  <Button
+                    type="dashed"
+                    loading={testingDb}
+                    onClick={testDbConnection}
+                  >
+                    测试连接
+                  </Button>
+                  {testStatus === "success" && (
+                    <CheckCircleFilled
+                      style={{ color: "#52c41a", fontSize: "18px" }}
+                    />
+                  )}
+                  {testStatus === "error" && (
+                    <CloseCircleFilled
+                      style={{ color: "#ff4d4f", fontSize: "18px" }}
+                    />
+                  )}
+                </Space>
+              </Col>
             </Row>
+
+            <Form.Item
+              noStyle
+              shouldUpdate={(p, c) =>
+                p.commonConfig?.connMode !== c.commonConfig?.connMode
+              }
+            >
+              {({ getFieldValue }) => {
+                const mode = getFieldValue(["commonConfig", "connMode"]);
+                return mode === "string" ? (
+                  <Form.Item
+                    name={["commonConfig", "dbConnection"]}
+                    label="连接字符串"
+                    rules={[{ required: true }]}
+                  >
+                    <Input placeholder="mysql://user:pass@host:3306/db" />
+                  </Form.Item>
+                ) : (
+                  <Row gutter={12}>
+                    <Col span={8}>
+                      <Form.Item
+                        name={["commonConfig", "dbHost"]}
+                        label="主机"
+                        rules={[{ required: true }]}
+                      >
+                        <Input placeholder="127.0.0.1" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={4}>
+                      <Form.Item
+                        name={["commonConfig", "dbPort"]}
+                        label="端口"
+                        rules={[{ required: true }]}
+                      >
+                        <Input placeholder="3306" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        name={["commonConfig", "dbName"]}
+                        label="库名"
+                        rules={[{ required: true }]}
+                      >
+                        <Input placeholder="db_name" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        name={["commonConfig", "dbUser"]}
+                        label="用户名"
+                      >
+                        <Input placeholder="root" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={["commonConfig", "dbPass"]} label="密码">
+                        <Input.Password placeholder="password" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                );
+              }}
+            </Form.Item>
 
             <Form.Item
               name={["commonConfig", "apiAuthToken"]}
@@ -353,10 +417,7 @@ export const TenantList: React.FC<TenantListProps> = ({
             label="备注说明"
             style={{ marginTop: 16 }}
           >
-            <TextArea
-              rows={2}
-              placeholder="记录租户入驻背景、对接人等信息..."
-            />
+            <TextArea rows={2} placeholder="记录租户入驻背景等信息..." />
           </Form.Item>
         </Form>
       </Modal>

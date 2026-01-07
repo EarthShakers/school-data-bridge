@@ -1,70 +1,66 @@
 import { NextResponse } from "next/server";
 import knex from "knex";
+import { Client as PgClient } from "pg";
 
 export async function POST(request: Request) {
   let db: any = null;
+  let pgClient: PgClient | null = null;
   try {
-    const { dbType, connectionString } = await request.json();
+    const { dbType, connection } = await request.json();
 
-    if (!dbType || !connectionString) {
+    if (!dbType || !connection) {
       return NextResponse.json({ error: "参数缺失" }, { status: 400 });
     }
 
-    console.log(`[TestDB] Attempting to connect to ${dbType}...`);
+    const isString = typeof connection === "string";
 
+    // --- 针对 PostgreSQL 的驱动测试 ---
+    if (dbType === "postgresql") {
+      pgClient = new PgClient(isString ? { 
+        connectionString: connection,
+        ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 10000 
+      } : {
+        host: connection.host,
+        port: connection.port,
+        user: connection.user,
+        password: connection.password,
+        database: connection.database,
+        ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 10000 
+      });
+
+      try {
+        await pgClient.connect();
+        await pgClient.query("SELECT 1");
+        return NextResponse.json({ success: true, message: "PostgreSQL 连接成功！" });
+      } finally {
+        await pgClient.end();
+      }
+    }
+
+    // --- 针对其他数据库使用 Knex 测试 ---
     const clientMap: Record<string, string> = {
       mysql: "mysql2",
-      postgresql: "pg",
       oracle: "oracledb",
       sqlserver: "tedious",
     };
 
-    const client = clientMap[dbType] || dbType;
-
     db = knex({
-      client,
-      connection: connectionString,
-      // 增加连接超时限制，防止一直挂起
-      acquireConnectionTimeout: 5000,
+      client: clientMap[dbType] || dbType,
+      connection: connection,
+      acquireConnectionTimeout: 8000,
       pool: { min: 0, max: 1 },
     });
 
-    // 尝试执行一个极其简单的查询
-    // 对于 MySQL/PostgreSQL/SQLServer 通常都是这个
-    let testSql = "SELECT 1 as result";
-    if (dbType === "oracle") {
-      testSql = "SELECT 1 FROM DUAL";
-    }
-
+    let testSql = dbType === "oracle" ? "SELECT 1 FROM DUAL" : "SELECT 1 as result";
     await db.raw(testSql).timeout(4000);
 
-    console.log(`[TestDB] ✅ Connection successful for ${dbType}`);
     return NextResponse.json({ success: true, message: "数据库连接成功！" });
   } catch (error: any) {
-    console.error("[TestDB] ❌ Connection failed:", error.message);
-
-    let friendlyError = error.message;
-    if (error.code === "PROTOCOL_CONNECTION_LOST") {
-      friendlyError =
-        "连接被服务器主动关闭，请检查数据库类型、连接字符串、白名单、账号密码是否正确，或是否需要 SSL。";
-    } else if (error.code === "ETIMEDOUT") {
-      friendlyError = "连接超时，请检查数据库地址和端口是否开放。";
-    } else if (error.code === "ECONNREFUSED") {
-      friendlyError = "连接被拒绝，请确认数据库服务是否已启动。";
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: friendlyError,
-      },
-      { status: 500 }
-    );
+    console.error("[TestDB] Connection failed:", error.code, error.message);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   } finally {
-    if (db) {
-      try {
-        await db.destroy();
-      } catch (e) {}
-    }
+    if (db) await db.destroy();
   }
 }
