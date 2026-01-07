@@ -18,16 +18,23 @@ export async function runSyncTask(tenantId: string, entityType: EntityType) {
   let totalProcessed = 0;
   let totalWritten = 0;
   let totalFailed = 0;
+  let allCollectedRecords: any[] = [];
+  let finalStages = {
+    fetch: { total: 0, status: "success" },
+    transform: { success: 0, failed: 0 },
+    write: { success: 0, failed: 0 },
+  };
+
   let page = 1;
   let offset = 0;
   let hasMore = true;
 
   try {
     const config = await getSchoolConfig(tenantId, entityType);
-    const traceId = `trace_${Date.now()}`; // 统一本次同步的 traceId
+    const taskTraceId = `task_${Date.now()}`;
 
     while (hasMore) {
-      // 1. 准备本次抓取的配置（支持分页/偏移量动态更新）
+      // 1. 准备配置
       const currentConfig = { ...config };
       if (
         currentConfig.dataSource.type === "api" &&
@@ -38,76 +45,62 @@ export async function runSyncTask(tenantId: string, entityType: EntityType) {
         currentConfig.dataSource.config.offset = offset;
       }
 
-      // 2. 抓取当前批次数据
+      // 2. 抓取数据
       const envelope = await fetchData(currentConfig);
       const rawData = envelope.rawData;
+      const currentBatchSize = Array.isArray(rawData)
+        ? rawData.length
+        : rawData
+        ? 1
+        : 0;
 
-      if (!rawData || (Array.isArray(rawData) && rawData.length === 0)) {
-        console.log(
-          `[Executor] 🏁 No more data found at page ${page}/offset ${offset}.`
-        );
+      if (currentBatchSize === 0) {
+        console.log(`[Executor] 🏁 No more data found.`);
         break;
       }
 
-      const currentBatchSize = Array.isArray(rawData) ? rawData.length : 1;
+      // 3. 转换与校验
+      const {
+        allRecords: batchRecords,
+        successCount,
+        failedCount,
+      } = await transformAndValidate(envelope, currentConfig);
 
-      // 3. 转换与校验当前批次
-      const { allRecords, successCount, failedCount } =
-        await transformAndValidate(envelope, currentConfig);
+      allCollectedRecords.push(...batchRecords);
+      finalStages.fetch.total += currentBatchSize;
+      finalStages.transform.success += successCount;
+      finalStages.transform.failed += failedCount;
 
-      // 4. 统计阶段数据
-      const stageStats = {
-        fetch: { total: currentBatchSize, status: "success" },
-        transform: { success: successCount, failed: failedCount },
-        write: { success: 0, failed: 0 },
-      };
-
-      // 5. 过滤出成功数据并准备写入
-      const dataToWrite = allRecords
+      // 4. 写入 Java 服务
+      const dataToWrite = batchRecords
         .filter((r) => r._importStatus === "success")
         .map(({ _importStatus, _importError, _metadata, ...rest }) => rest);
 
       if (dataToWrite.length > 0) {
-        // 6. 写入 Java 服务
-        const javaOptions = {
+        const stats = await writeToInternalJavaService(dataToWrite, {
           batchSize:
             config.batchConfig.batchSize || baseConfig.DEFAULT_BATCH_SIZE,
           concurrency: Math.max(1, baseConfig.MAX_GLOBAL_CONCURRENCY / 2),
           javaEndpoint: getEndpointForEntity(config.entityType),
-        };
-
-        const stats = await writeToInternalJavaService(
-          dataToWrite,
-          javaOptions
-        );
+        });
         totalWritten += stats.success;
-        totalFailed += stats.failed;
-        stageStats.write = { success: stats.success, failed: stats.failed };
+        finalStages.write.success += stats.success;
+        finalStages.write.failed += stats.failed;
       }
-
-      // 7. 保存本地日志 (包含全流程阶段指标)
-      saveImportResult(
-        tenantId,
-        entityType,
-        envelope.traceId,
-        allRecords,
-        stageStats
-      );
 
       totalProcessed += currentBatchSize;
       totalFailed += failedCount;
 
       console.log(
-        `[Executor] 📦 Batch Finished: Page ${page}, Processed ${currentBatchSize}, Valid ${successCount}, Invalid ${failedCount}`
+        `[Executor] 📦 Batch Finished: Page ${page}, Processed ${currentBatchSize}, Valid ${successCount}`
       );
 
-      // 7. 判断是否还有下一页
+      // 5. 分页控制
       if (
         currentConfig.dataSource.type === "api" &&
         currentConfig.dataSource.config.pagination
       ) {
         page++;
-        // 如果返回的数据少于每页大小，说明是最后一页
         if (
           currentBatchSize < currentConfig.dataSource.config.pagination.pageSize
         ) {
@@ -120,11 +113,10 @@ export async function runSyncTask(tenantId: string, entityType: EntityType) {
           hasMore = false;
         }
       } else {
-        // 非分页数据源，执行一次即退出
         hasMore = false;
       }
 
-      // 🧪 Mock 模式保护：避免死循环
+      // Mock 保护
       if (
         config.dataSource.type === "api" &&
         config.dataSource.config.url.includes("example.com")
@@ -133,26 +125,27 @@ export async function runSyncTask(tenantId: string, entityType: EntityType) {
       }
     }
 
+    // 6. 最终日志保存
+    saveImportResult(
+      tenantId,
+      entityType,
+      taskTraceId,
+      allCollectedRecords,
+      finalStages
+    );
+
     console.log(
-      `\n[Executor] ✨ All Batches Finished for ${tenantId}:${entityType}:`,
-      {
-        totalProcessed,
-        totalWritten,
-        totalFailed,
-      }
+      `\n[Executor] ✨ Task Completed: Total ${totalProcessed}, Written ${totalWritten}`
     );
 
     return {
       success: true,
       total: totalProcessed,
       written: totalWritten,
-      failed: totalFailed,
+      failed: totalFailed + finalStages.write.failed,
     };
   } catch (error: any) {
-    console.error(
-      `[Executor] ❌ Fatal Error: ${tenantId}:${entityType} ->`,
-      error.message
-    );
+    console.error(`[Executor] ❌ Fatal Error:`, error.message);
     throw error;
   }
 }

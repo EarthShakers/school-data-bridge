@@ -5,6 +5,7 @@ import {
 } from "@/src/mapping/localAdapter";
 import fs from "fs";
 import path from "path";
+import JSON5 from "json5";
 
 const CONFIG_BASE_PATH = path.join(process.cwd(), "config", "schools");
 
@@ -22,8 +23,8 @@ export async function GET() {
       if (fs.existsSync(configPath)) {
         try {
           const content = fs.readFileSync(configPath, "utf-8");
-          // 兼容 JSON5
-          const parsed = JSON.parse(content);
+          // 修正：使用 JSON5 解析，防止因注释导致报错
+          const parsed = JSON5.parse(content);
           tenantConfig = {
             schoolName: parsed.schoolName || "未命名学校",
             status: parsed.status || "active",
@@ -97,16 +98,12 @@ export async function POST(request: Request) {
           schoolName: "新租户",
           entityType,
           dataSource: {
-            type: "api",
+            type: "db", // 默认显示为 DB 模式，方便用户看到数据库配置
             config: {
-              url: `https://api.example.com/${entityType}`,
-              method: "GET",
-              params: {},
-              pagination: {
-                pageParam: "page",
-                sizeParam: "size",
-                pageSize: 100,
-              },
+              dbType: "", // 留空，自动回退到租户级配置
+              connectionString: "", // 留空，自动回退到租户级配置
+              modelName: "YOUR_TABLE_NAME",
+              batchSize: 100,
             },
           },
           fieldMap: [{ sourceField: "id", targetField: "id", label: "ID" }],

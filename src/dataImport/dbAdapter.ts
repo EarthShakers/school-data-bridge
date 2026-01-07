@@ -16,30 +16,25 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
     throw new Error("[DbAdapter] Invalid dataSource type");
   }
 
-  const { dataSource, tenantId } = config;
-  const {
-    dbType,
-    viewName,
-    sql,
-    modelName,
-    connectionString,
-    // 也可以扩展针对不同 DB 类型的配置
-  } = dataSource.config;
+  const { dataSource, tenantId, entityType } = config;
+  const { dbType, viewName, sql, modelName, connectionString } =
+    dataSource.config;
 
   const traceId = uuidv4();
 
   console.log(
-    `[DbAdapter] 🚀 Fetching from DB for ${tenantId}. Mode: ${
-      viewName ? "View" : sql ? "SQL" : "Model"
-    }`
+    `[DbAdapter] 🚀 Fetching from DB for ${tenantId || "Unknown"}:${
+      entityType || "Unknown"
+    }. Mode: ${viewName ? "View" : sql ? "SQL" : "Model"}`
   );
 
-  // 🧪 Mock 逻辑：如果没有真实连接配置，返回 Mock 数据
-  if (!connectionString || connectionString.includes("localhost")) {
-    console.log(
-      `[DbAdapter] 🧪 Using mock data for DB source (${config.entityType})`
-    );
+  // 🧪 Mock 逻辑判断：只有当连接字符串明确为空时才使用 Mock
+  const isMock = !connectionString || connectionString === "";
 
+  if (isMock) {
+    console.log(
+      `[DbAdapter] 🧪 Using mock data. Reason: Empty connection string`
+    );
     return {
       traceId,
       tenantId,
@@ -47,6 +42,10 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
         config.entityType === "student" ? studentMockData : teacherMockData,
     };
   }
+
+  console.log(
+    `[DbAdapter] 🔌 Attempting real DB connection to ${dbType} for ${tenantId}`
+  );
 
   // 映射 DB 类型到 knex 客户端
   const clientMap: Record<string, string> = {
@@ -90,19 +89,21 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
     const offset = dataSource.config.offset || 0;
 
     if (viewName) {
-      // 视图模式：增加 limit 保护
-      rawData = await db
+      const query = db
         .select(queryFields)
         .from(viewName)
         .limit(batchSize)
         .offset(offset);
+      console.log(`[DbAdapter] 🔍 Executing Query: ${query.toString()}`);
+      rawData = await query;
     } else if (modelName) {
-      // 模型/表名模式：增加 limit 保护
-      rawData = await db
+      const query = db
         .select(queryFields)
         .from(modelName)
         .limit(batchSize)
         .offset(offset);
+      console.log(`[DbAdapter] 🔍 Executing Query: ${query.toString()}`);
+      rawData = await query;
     } else if (sql) {
       // 原生 SQL 模式
       const result = await db.raw(sql);

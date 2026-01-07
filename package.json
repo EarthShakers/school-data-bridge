@@ -10,9 +10,9 @@
     "web:start": "next start",
     "lint": "next lint",
     "cli:dev": "ts-node-dev --respawn src/index.ts",
-    "worker": "RUN_MODE=worker ts-node src/index.ts",
-    "scheduler": "RUN_MODE=scheduler ts-node src/index.ts",
-    "produce": "RUN_MODE=producer ts-node src/index.ts"
+    "worker": "RUN_MODE=worker tsx src/index.ts",
+    "scheduler": "RUN_MODE=scheduler tsx src/index.ts",
+    "produce": "RUN_MODE=producer tsx src/index.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
@@ -48,6 +48,7 @@
     "tailwindcss": "^3.4.0",
     "ts-node": "^10.9.1",
     "ts-node-dev": "^2.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.2.2"
   }
 }

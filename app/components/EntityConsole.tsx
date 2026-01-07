@@ -127,6 +127,13 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   useEffect(() => {
     fetchConfig();
     fetchLogs();
+
+    // 设置自动刷新：每 10 秒更新一次日志列表
+    const timer = setInterval(() => {
+      fetchLogs();
+    }, 10000);
+
+    return () => clearInterval(timer);
   }, [tenantId, entityType]);
 
   const logColumns = [
@@ -216,17 +223,35 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
 
           <Card
             title={
-              <span>
-                <HistoryOutlined /> 最近执行记录
-              </span>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>
+                  <HistoryOutlined /> 最近执行记录
+                </span>
+                <Button
+                  size="small"
+                  icon={<SyncOutlined spin={loadingLogs} />}
+                  onClick={fetchLogs}
+                >
+                  刷新
+                </Button>
+              </div>
             }
           >
             <Table
-              dataSource={logs}
+              dataSource={logs.sort(
+                (a, b) =>
+                  new Date(b.time).getTime() - new Date(a.time).getTime()
+              )}
               columns={logColumns}
               size="small"
               loading={loadingLogs}
-              pagination={false}
+              pagination={{ pageSize: 5 }}
               rowKey="filename"
             />
           </Card>
@@ -248,30 +273,49 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                 items={[
                   {
                     title: "数据抓取",
-                    description: `抓取总数: ${selectedLog.stages?.fetch?.total || 0}`,
-                    status: selectedLog.stages?.fetch?.status === "success" ? "finish" : "error",
+                    description: `抓取总数: ${
+                      selectedLog.stages?.fetch?.total || 0
+                    }`,
+                    status:
+                      selectedLog.stages?.fetch?.status === "success"
+                        ? "finish"
+                        : "error",
                   },
                   {
                     title: "数据转换与校验",
                     description: (
                       <div>
-                        <Text type="success">成功: {selectedLog.stages?.transform?.success || 0}</Text>
+                        <Text type="success">
+                          成功: {selectedLog.stages?.transform?.success || 0}
+                        </Text>
                         <br />
-                        <Text type="danger">失败: {selectedLog.stages?.transform?.failed || 0}</Text>
+                        <Text type="danger">
+                          失败: {selectedLog.stages?.transform?.failed || 0}
+                        </Text>
                       </div>
                     ),
-                    status: (selectedLog.stages?.transform?.failed || 0) > 0 ? "error" : "finish",
+                    status:
+                      (selectedLog.stages?.transform?.failed || 0) > 0
+                        ? "error"
+                        : "finish",
                   },
                   {
                     title: "写入 Java 服务",
                     description: (
                       <div>
-                        <Text type="success">写入: {selectedLog.stages?.write?.success || 0}</Text>
+                        <Text type="success">
+                          写入: {selectedLog.stages?.write?.success || 0}
+                        </Text>
                         <br />
-                        <Text type="danger">失败: {selectedLog.stages?.write?.failed || 0}</Text>
+                        <Text type="danger">
+                          失败: {selectedLog.stages?.write?.failed || 0}
+                        </Text>
                       </div>
                     ),
-                    status: (selectedLog.stages?.write?.failed || 0) > 0 ? "error" : "finish",
+                    status:
+                      (selectedLog.stages?.write?.failed || 0) > 0
+                        ? "error"
+                        : "finish",
                   },
                 ]}
               />
@@ -337,4 +381,3 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
     </div>
   );
 };
-

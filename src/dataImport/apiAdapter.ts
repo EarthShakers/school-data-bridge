@@ -10,7 +10,7 @@ export async function fetchFromExternalApi(
     throw new Error("[ApiAdapter] Invalid dataSource type");
   }
 
-  const { dataSource, tenantId } = config;
+  const { dataSource, tenantId, entityType } = config;
   const {
     url,
     method = "GET",
@@ -20,6 +20,8 @@ export async function fetchFromExternalApi(
   } = dataSource.config;
 
   const traceId = uuidv4();
+
+  console.log(`[ApiAdapter] 🌐 Fetching from API for ${tenantId || 'Unknown'}:${entityType || 'Unknown'} -> ${url}`);
 
   // 🧪 Mock 逻辑
   if (!url || url.includes("example.com")) {
