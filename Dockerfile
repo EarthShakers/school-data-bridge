@@ -32,22 +32,16 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# 复制静态资源和公开文件
-COPY --from=builder /app/public ./public
-
-# 设置缓存目录权限
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
 # 复制独立构建产物
 # .next/standalone 包含了运行 server.js 所需的最简依赖
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # ❗ 注意：由于 Worker/Scheduler 需要运行 src 目录下的代码，
-# 我们需要额外将 src 目录以及必要的 tsx 环境带入镜像。
-# Standalone 模式默认不包含非 Next.js 的入口文件。
+# 我们需要额外将源码目录带入镜像。
 COPY --from=builder --chown=nextjs:nodejs /app/src ./src
+COPY --from=builder --chown=nextjs:nodejs /app/mock ./mock
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 
 USER nextjs
 
