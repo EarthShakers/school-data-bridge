@@ -35,6 +35,7 @@ export async function getSchoolConfig(
     fieldMap: entityRow.field_map,
     batchConfig: entityRow.batch_config || { batchSize: 100, retryTimes: 3 },
     syncConfig: entityRow.sync_config || { enabled: false, cron: "0 0 * * *" },
+    javaAuthToken: commonConfig.apiAuthToken, // 从租户共享配置中获取 Token
   };
 
   // 4. 数据源合并优先级
@@ -51,7 +52,7 @@ export async function getSchoolConfig(
     if (commonConfig.apiAuthToken) {
       apiConfig.headers = {
         ...apiConfig.headers,
-        Authorization: `Bearer ${commonConfig.apiAuthToken}`,
+        Authorization: commonConfig.apiAuthToken,
       };
     }
   }

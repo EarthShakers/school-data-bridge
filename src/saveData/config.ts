@@ -29,7 +29,6 @@ export async function getSystemEnvironments(): Promise<EnvironmentConfig[]> {
 }
 
 export const baseConfig = {
-  JAVA_USER_SERVICE_TOKEN: process.env.JAVA_USER_SERVICE_TOKEN,
   JAVA_USER_SERVICE_TIMEOUT: 30000,
   DEFAULT_BATCH_SIZE: 100,
   DEFAULT_RETRY_TIMES: 3,

@@ -89,6 +89,7 @@ export async function runSyncTask(
             config.entityType,
             environment
           ),
+          authToken: config.javaAuthToken, // 传入租户配置的 Token
         });
         totalWritten += stats.success;
         finalStages.write.success += stats.success;

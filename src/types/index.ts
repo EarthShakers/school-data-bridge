@@ -14,6 +14,7 @@ export interface SchoolConfig {
     priority?: number; // 优先级
     environment?: string; // 自动调度时的目标环境
   };
+  javaAuthToken?: string; // Java 写入服务的鉴权 Token
 }
 
 export type EntityType =

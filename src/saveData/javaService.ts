@@ -6,13 +6,14 @@ export interface WriteOptions {
   batchSize: number;
   concurrency: number;
   javaEndpoint: string;
+  authToken?: string; // 新增：支持传入 Token
 }
 
 export async function writeToInternalJavaService(
   data: any[],
   options: WriteOptions
 ): Promise<{ success: number; failed: number }> {
-  const { batchSize, concurrency, javaEndpoint } = options;
+  const { batchSize, concurrency, javaEndpoint, authToken } = options;
   const limit = pLimit(concurrency);
 
   let successCount = 0;
@@ -44,7 +45,7 @@ export async function writeToInternalJavaService(
         await axios.post(javaEndpoint, batch, {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${baseConfig.JAVA_USER_SERVICE_TOKEN}`,
+            Authorization: authToken || "", // 优先使用传入的 Token
           },
           timeout: baseConfig.JAVA_USER_SERVICE_TIMEOUT,
         });
