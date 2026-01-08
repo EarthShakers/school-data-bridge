@@ -7,11 +7,11 @@ export const metadataDb = knex({
     process.env.METADATA_DB_URL ||
     "mysql://root:hyt123456@120.46.13.170:3306/school_data_bridge",
   pool: {
-    min: 2,
-    max: 20,
-    acquireTimeoutMillis: 30000,
-    idleTimeoutMillis: 30000,
-    reapIntervalMillis: 1000,
+    min: 0,
+    max: 15,
+    acquireTimeoutMillis: 60000,
+    idleTimeoutMillis: 10000,
+    reapIntervalMillis: 500,
     createTimeoutMillis: 30000,
     propagateCreateError: false,
   },
