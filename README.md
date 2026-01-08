@@ -163,6 +163,45 @@ REDIS_PORT=6379
 
 ---
 
+## 🐳 Docker 部署 (生产环境)
+
+系统已针对生产环境进行了 Docker 优化，支持 Next.js Standalone 模式。
+
+### 1. 启动服务
+
+在根目录下执行：
+
+```bash
+docker-compose up -d --build
+```
+
+这会启动 4 个容器：
+
+- `bridge-redis`: 任务队列存储
+- `bridge-web`: 管理后台 (Port 3000)
+- `bridge-worker`: 任务处理器
+- `bridge-scheduler`: 任务调度器
+
+### 2. 环境变量
+
+在 `docker-compose.yml` 中，可以通过 `RUN_MODE` 切换容器角色：
+
+- `manual`: Web 控制台模式
+- `worker`: Worker 模式
+- `scheduler`: Scheduler 模式
+
+同时需要配置 `METADATA_DB_URL` 指向你的 MySQL 元数据库。
+
+### 3. 初始化数据库
+
+第一次部署时，需运行迁移脚本：
+
+```bash
+docker exec -it bridge-web npx tsx scripts/migrateToDb.ts
+```
+
+---
+
 ## 📂 文件系统
 
 ```text

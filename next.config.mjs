@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['antd', '@ant-design/icons', 'bullmq'],
+  output: "standalone",
+  transpilePackages: ["antd", "@ant-design/icons", "bullmq"],
   webpack: (config) => {
     config.externals.push({
       'utf-8-validate': 'commonjs utf-8-validate',
