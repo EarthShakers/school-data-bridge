@@ -68,7 +68,7 @@ async function initSchema() {
       table.increments("id").primary();
       table.string("tenant_id", 100).notNullable().index().comment("租户ID");
       table.string("entity_type", 50).notNullable().index().comment("实体类型");
-      table.string("trace_id", 100).notNullable().comment("跟踪ID");
+      table.string("trace_id", 100).notNullable().unique().comment("跟踪ID");
       table.json("summary").notNullable().comment("统计摘要(total/success/failed)");
       table.json("stages").comment("全流程阶段指标(fetch/transform/write)");
       table.specificType("success_data", "LONGTEXT").comment("成功的记录详情(JSON字符串)");

@@ -40,7 +40,7 @@ export async function saveImportResultToDb(
   }));
 
   try {
-    await metadataDb("bridge_sync_logs").insert({
+    const data = {
       tenant_id: tenantId,
       entity_type: entityType,
       trace_id: traceId,
@@ -48,8 +48,30 @@ export async function saveImportResultToDb(
       stages: JSON.stringify(stages),
       success_data: JSON.stringify(successDataClean),
       failed_data: JSON.stringify(failedDataWithReason),
-    });
-    console.log(`[Storage] 🗄 Import result saved to Database for ${tenantId}:${entityType}`);
+    };
+
+    /**
+     * 重要：不要依赖 trace_id 的唯一索引来做 upsert（不同环境可能没有建 unique）。
+     * 策略：先 update；如果没有命中行，再 insert。
+     */
+    const updated = await metadataDb("bridge_sync_logs")
+      .where({ trace_id: traceId })
+      .update({
+        tenant_id: tenantId,
+        entity_type: entityType,
+        summary: data.summary,
+        stages: data.stages,
+        success_data: data.success_data,
+        failed_data: data.failed_data,
+      });
+
+    if (!updated) {
+      await metadataDb("bridge_sync_logs").insert(data);
+    }
+
+    console.log(
+      `[Storage] 🗄 Import result synced to DB for ${tenantId}:${entityType} (TraceId: ${traceId}, updated=${updated ? "yes" : "no"})`
+    );
   } catch (error: any) {
     console.error(`[Storage] ❌ Failed to save import result to DB:`, error.message);
   }

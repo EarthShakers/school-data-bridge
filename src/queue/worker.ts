@@ -6,15 +6,15 @@ import { runSyncTask } from "../core/executor";
 export const syncWorker = new Worker(
   QUEUE_NAME,
   async (job: Job) => {
-    const { tenantId, entityType, environment } = job.data;
+    const { tenantId, entityType, environment, traceId } = job.data;
     console.log(
       `[Worker] 🛠 Processing Job ${job.id}: ${tenantId}-${entityType} (Env: ${
         environment || "dev"
-      })`
+      }, TraceId: ${traceId})`
     );
 
-    // 执行实际的同步逻辑
-    return await runSyncTask(tenantId, entityType, environment);
+    // 执行实际的同步逻辑，传入已有的 traceId
+    return await runSyncTask(tenantId, entityType, environment, traceId);
   },
   {
     connection: redisConnection,

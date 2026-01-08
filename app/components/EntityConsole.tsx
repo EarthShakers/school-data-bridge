@@ -25,9 +25,11 @@ import {
   HistoryOutlined,
   FileTextOutlined,
   CloudServerOutlined,
+  DesktopOutlined,
 } from "@ant-design/icons";
-import dynamic from "next/dynamic"; // 1. 引入 dynamic
-import { loader } from "@monaco-editor/react"; // 引入 loader
+import dynamic from "next/dynamic";
+import Link from "next/link"; // 引入 Link
+import { loader } from "@monaco-editor/react";
 import dayjs from "dayjs";
 import JSON5 from "json5";
 
@@ -210,26 +212,65 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       render: (t: string) => dayjs(t).format("YYYY-MM-DD HH:mm:ss"),
     },
     {
+      title: "状态",
+      key: "status",
+      render: (record: any) => {
+        const fetchStatus = record.stages?.fetch?.status;
+        const isRunning = fetchStatus === "running";
+        const isQueued = fetchStatus === "queued";
+
+        if (isRunning) {
+          return <Badge status="processing" text="执行中..." />;
+        }
+        if (isQueued) {
+          return <Badge status="warning" text="排队中..." />;
+        }
+        const hasError =
+          record.summary?.failed > 0 ||
+          fetchStatus === "failed" ||
+          record.stages?.write?.failed > 0;
+
+        return hasError ? (
+          <Badge status="error" text="异常" />
+        ) : (
+          <Badge status="success" text="完成" />
+        );
+      },
+    },
+    {
       title: "统计",
       dataIndex: "summary",
       render: (s: any) => (
         <Space>
-          <Badge status="processing" text={`总数: ${s.total}`} />
-          <Badge status="success" text={`成功: ${s.success}`} />
-          <Badge status="error" text={`失败: ${s.failed}`} />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            总数: {s.total}
+          </Text>
+          <Text type="success" style={{ fontSize: 12 }}>
+            成功: {s.success}
+          </Text>
+          <Text type="danger" style={{ fontSize: 12 }}>
+            失败: {s.failed}
+          </Text>
         </Space>
       ),
     },
     {
       title: "操作",
       render: (record: any) => (
-        <Button
-          size="small"
-          type="link"
-          onClick={() => viewLogDetail(record.id)}
-        >
-          详情
-        </Button>
+        <Space>
+          <Button
+            size="small"
+            type="link"
+            onClick={() => viewLogDetail(record.id)}
+          >
+            详情
+          </Button>
+          <Link href="/tasks">
+            <Button size="small" type="link" icon={<DesktopOutlined />}>
+              任务队列
+            </Button>
+          </Link>
+        </Space>
       ),
     },
   ];

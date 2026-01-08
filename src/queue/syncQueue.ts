@@ -29,14 +29,19 @@ export async function addSyncJob(
   tenantId: string,
   entityType: EntityType,
   environment: string = "dev",
-  priority = 10
+  priority = 10,
+  traceId?: string // 新增：可选的 Trace ID
 ) {
-  // 修复：为了支持同一个 租户:实体 连续触发多次显示，在 ID 后增加毫秒时间戳
   const timestamp = Date.now();
   const jobId = `manual-${tenantId}-${entityType}-${timestamp}`;
   await syncQueue.add(
     "sync-task",
-    { tenantId, entityType, environment },
+    {
+      tenantId,
+      entityType,
+      environment,
+      traceId: traceId || `task_${timestamp}`, // 如果没传则生成一个
+    },
     { jobId, priority }
   );
   console.log(`[Queue] 📥 Job added: ${jobId} (Env: ${environment})`);

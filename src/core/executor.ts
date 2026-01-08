@@ -13,11 +13,15 @@ import { EntityType } from "../types";
 export async function runSyncTask(
   tenantId: string,
   entityType: EntityType,
-  environment: string = "dev"
+  environment: string = "dev",
+  providedTraceId?: string // 新增：可选的外部 traceId
 ) {
   console.log(
     `\n>>> [Executor] Starting Sync: Tenant=${tenantId}, Entity=${entityType}, Env=${environment}`
   );
+
+  // 必须在 try/catch 之外定义，否则 catch 中无法引用，导致状态无法落库
+  const taskTraceId = providedTraceId || `task_${Date.now()}`;
 
   let totalProcessed = 0;
   let totalWritten = 0;
@@ -35,7 +39,13 @@ export async function runSyncTask(
 
   try {
     const config = await getSchoolConfig(tenantId, entityType);
-    const taskTraceId = `task_${Date.now()}`;
+
+    // --- 修改：使用外部传入或新生成的 traceId ---
+    await saveImportResultToDb(tenantId, entityType, taskTraceId, [], {
+      fetch: { total: 0, status: "running" },
+      transform: { success: 0, failed: 0 },
+      write: { success: 0, failed: 0 },
+    });
 
     while (hasMore) {
       // 1. 准备配置
@@ -157,16 +167,18 @@ export async function runSyncTask(
       `[Executor] ❌ Fatal Error: ${tenantId}:${entityType} ->`,
       error.message
     );
-    // 即使失败，也尝试保存当前已处理的记录
-    if (allCollectedRecords.length > 0) {
-      await saveImportResultToDb(
-        tenantId,
-        entityType,
-        `error-${Date.now()}`,
-        allCollectedRecords,
-        finalStages
-      );
-    }
+    // 即使失败，也要更新数据库状态为 failed，防止 UI 卡在 "排队中" 或 "进行中"
+    await saveImportResultToDb(
+      tenantId,
+      entityType,
+      taskTraceId,
+      allCollectedRecords,
+      {
+        fetch: { total: finalStages.fetch.total, status: "failed" },
+        transform: finalStages.transform,
+        write: finalStages.write,
+      }
+    );
     throw error;
   }
 }
