@@ -26,9 +26,28 @@ import {
   FileTextOutlined,
   CloudServerOutlined,
 } from "@ant-design/icons";
-import Editor from "@monaco-editor/react";
+import dynamic from "next/dynamic"; // 1. 引入 dynamic
 import dayjs from "dayjs";
 import JSON5 from "json5";
+
+// 2. 动态导入 Editor 组件，并禁用 SSR
+const Editor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div
+      style={{
+        height: "600px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#fafafa",
+        color: "#999",
+      }}
+    >
+      正在初始化编辑器...
+    </div>
+  ),
+});
 
 const { Text, Paragraph } = Typography;
 const { Option } = Select;
