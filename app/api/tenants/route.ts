@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { metadataDb } from "@/src/utils/metadataDb";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     // 明确映射数据库字段到前端期望的驼峰命名

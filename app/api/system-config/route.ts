@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSystemEnvironments } from "@/src/saveData/config";
 import { metadataDb } from "@/src/utils/metadataDb";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const envs = await getSystemEnvironments();
   return NextResponse.json({ environments: envs });
