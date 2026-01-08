@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { metadataDb } from "@/src/utils/metadataDb";
 import JSON5 from "json5";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/config?tenantId=xxx&entityType=yyy
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

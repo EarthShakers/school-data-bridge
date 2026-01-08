@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { metadataDb } from "@/src/utils/metadataDb";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const tenantId = searchParams.get("tenantId");
