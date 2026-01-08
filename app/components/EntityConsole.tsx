@@ -27,8 +27,18 @@ import {
   CloudServerOutlined,
 } from "@ant-design/icons";
 import dynamic from "next/dynamic"; // 1. 引入 dynamic
+import { loader } from "@monaco-editor/react"; // 引入 loader
 import dayjs from "dayjs";
 import JSON5 from "json5";
+
+// 配置 Monaco 使用本地资源，彻底解决跨域和安全上下文拦截问题
+if (typeof window !== "undefined") {
+  loader.config({
+    paths: {
+      vs: window.location.origin + "/monaco-vs",
+    },
+  });
+}
 
 // 2. 动态导入 Editor 组件，并禁用 SSR
 const Editor = dynamic(() => import("@monaco-editor/react"), {
@@ -48,6 +58,18 @@ const Editor = dynamic(() => import("@monaco-editor/react"), {
     </div>
   ),
 });
+
+// 处理 Monaco Worker 路径
+if (typeof window !== "undefined") {
+  (window as any).MonacoEnvironment = {
+    getWorkerUrl: function (_moduleId: any, label: string) {
+      if (label === "json") {
+        return "/monaco-vs/language/json/jsonWorker.js";
+      }
+      return "/monaco-vs/base/worker/workerMain.js";
+    },
+  };
+}
 
 const { Text, Paragraph } = Typography;
 const { Option } = Select;
