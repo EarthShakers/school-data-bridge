@@ -72,21 +72,38 @@ export async function POST(request: Request) {
 
     // --- 3. Oracle (原生驱动) ---
     if (dbType === "oracle") {
-      const oracleConfig = isString
-        ? { connectionString: connection }
-        : {
-            user: connection.user,
-            password: connection.password,
-            // Oracle 的 connectString 格式通常是 host:port/service_name
-            connectString:
-              connection.connectString ||
-              `${connection.host}:${connection.port}/${
-                connection.database || connection.sid
-              }`,
-          };
+      let connectString = "";
+      if (isString) {
+        connectString = connection;
+      } else {
+        const host = connection.host;
+        const port = connection.port || 1521;
+        const serviceName = connection.database || connection.serviceName;
+        const sid = connection.sid;
 
-      // 显式指定使用 Thin 模式（无需 Instant Client）
-      oracleConn = await oracledb.getConnection(oracleConfig);
+        // 如果提供了 SID，格式是 host:port:sid；如果是 ServiceName，格式是 host:port/serviceName
+        if (sid) {
+          connectString = `${host}:${port}:${sid}`;
+        } else {
+          connectString = `${host}:${port}/${serviceName}`;
+        }
+      }
+
+      const oracleConfig = {
+        user: isString ? "" : connection.user,
+        password: isString ? "" : connection.password,
+        connectString: connectString,
+      };
+
+      console.log(
+        `[TestDB] Oracle Attempting: ${connectString} (User: ${oracleConfig.user})`
+      );
+
+      // 增加连接超时配置
+      oracleConn = await oracledb.getConnection({
+        ...oracleConfig,
+        connectTimeout: 10000, // 10秒连接超时
+      });
       await oracleConn.execute("SELECT 1 FROM DUAL");
       await oracleConn.close();
       return NextResponse.json({
@@ -130,10 +147,12 @@ export async function POST(request: Request) {
     // Oracle 常见错误处理
     if (userMessage.includes("ORA-01017"))
       userMessage = "Oracle 访问被拒绝：用户名/密码无效";
-    if (userMessage.includes("ORA-12170"))
-      userMessage = "Oracle 连接超时：请检查防火墙";
+    if (userMessage.includes("ORA-12170") || userMessage.includes("NJS-510"))
+      userMessage = "Oracle 连接超时：请检查数据库 IP 是否公网可达及防火墙";
     if (userMessage.includes("ORA-12541"))
-      userMessage = "Oracle 监听错误：TNS 无监听程序";
+      userMessage = "Oracle 监听错误：TNS 无监听程序（请检查端口 1521）";
+    if (userMessage.includes("NJS-511"))
+      userMessage = "Oracle 网络不可达：请检查 IP 地址和 VPN 状态";
 
     return NextResponse.json(
       { success: false, error: userMessage },
