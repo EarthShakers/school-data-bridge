@@ -16,8 +16,20 @@ import {
 } from "antd";
 import { SyncOutlined, SearchOutlined, EyeOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 
 const { Text, Paragraph } = Typography;
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("Asia/Shanghai");
+
+function formatBeijingTime(input?: number | string) {
+  if (!input) return "-";
+  // BullMQ timestamp/finishedOn 是 ms number；日志/接口也可能是 ISO string
+  return dayjs(input).tz("Asia/Shanghai").format("YYYY-MM-DD HH:mm:ss");
+}
 
 interface TaskListProps {
   taskData: { counts: any; jobs: any[] };
@@ -42,6 +54,9 @@ export const TaskList: React.FC<TaskListProps> = ({
   // 增加防御性容错
   const counts = taskData?.counts || {};
   const jobs = taskData?.jobs || [];
+  const sortedJobs = [...jobs].sort(
+    (a: any, b: any) => (b?.timestamp || 0) - (a?.timestamp || 0)
+  );
 
   // 获取所有可用的实体类型用于过滤
   const uniqueEntities = Array.from(
@@ -150,15 +165,16 @@ export const TaskList: React.FC<TaskListProps> = ({
       title: "创建时间",
       dataIndex: "timestamp",
       key: "timestamp",
-      sorter: (a: any, b: any) => a.timestamp - b.timestamp,
-      render: (t: number) => dayjs(t).format("YYYY-MM-DD HH:mm:ss"),
+      defaultSortOrder: "descend",
+      sorter: (a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0),
+      render: (t: number) => formatBeijingTime(t),
     },
     {
       title: "完成时间",
       dataIndex: "finishedOn",
       key: "finishedOn",
       sorter: (a: any, b: any) => (a.finishedOn || 0) - (b.finishedOn || 0),
-      render: (t: number) => (t ? dayjs(t).format("YYYY-MM-DD HH:mm:ss") : "-"),
+      render: (t: number) => formatBeijingTime(t),
     },
     {
       title: "失败原因",
@@ -246,7 +262,7 @@ export const TaskList: React.FC<TaskListProps> = ({
 
       <Card title="实时任务队列 (最近 100 条)" bodyStyle={{ padding: 0 }}>
         <Table
-          dataSource={jobs.map((j: any) => ({ ...j, key: j.id }))}
+          dataSource={sortedJobs.map((j: any) => ({ ...j, key: j.id }))}
           loading={loading}
           size="small"
           pagination={{ pageSize: 15 }}
