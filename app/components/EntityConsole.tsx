@@ -100,7 +100,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
     setLoadingLogs(true);
     try {
       const res = await fetch(
-        `/api/logs?tenantId=${tenantId}&entityType=${entityType}`
+        `/api/sync-logs?tenantId=${tenantId}&entityType=${entityType}`
       );
       const data = await res.json();
       setLogs(data.logs || []);
@@ -114,7 +114,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   const viewLogDetail = async (logId: number) => {
     try {
       const res = await fetch(
-        `/api/logs?tenantId=${tenantId}&entityType=${entityType}&id=${logId}`
+        `/api/sync-logs?tenantId=${tenantId}&entityType=${entityType}&id=${logId}`
       );
       const data = await res.json();
       setSelectedLog(data);
