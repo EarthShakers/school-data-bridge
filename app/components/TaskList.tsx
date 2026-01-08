@@ -12,11 +12,12 @@ import {
   Typography,
   Input,
   Space,
+  Modal,
 } from "antd";
-import { SyncOutlined, SearchOutlined } from "@ant-design/icons";
+import { SyncOutlined, SearchOutlined, EyeOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
-const { Text } = Typography;
+const { Text, Paragraph } = Typography;
 
 interface TaskListProps {
   taskData: { counts: any; jobs: any[] };
@@ -30,6 +31,13 @@ export const TaskList: React.FC<TaskListProps> = ({
   onRefresh,
 }) => {
   const [searchText, setSearchText] = useState("");
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [currentError, setCurrentError] = useState("");
+
+  const showReason = (reason: string) => {
+    setCurrentError(reason);
+    setErrorModalVisible(true);
+  };
 
   // 增加防御性容错
   const counts = taskData?.counts || {};
@@ -156,8 +164,32 @@ export const TaskList: React.FC<TaskListProps> = ({
       title: "失败原因",
       dataIndex: "failedReason",
       key: "failedReason",
-      ellipsis: true,
-      render: (r: string) => (r ? <Text type="danger">{r}</Text> : "-"),
+      width: 320,
+      render: (r: string) =>
+        r ? (
+          <div style={{ paddingRight: 10 }}>
+            <Space size={4}>
+              <Text
+                type="danger"
+                style={{ maxWidth: 180 }}
+                ellipsis={{ tooltip: r }}
+              >
+                {r}
+              </Text>
+              <Button
+                type="link"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => showReason(r)}
+                style={{ padding: "0 4px" }}
+              >
+                查看详情
+              </Button>
+            </Space>
+          </div>
+        ) : (
+          "-"
+        ),
     },
   ];
 
@@ -221,6 +253,41 @@ export const TaskList: React.FC<TaskListProps> = ({
           columns={columns}
         />
       </Card>
+
+      <Modal
+        title="任务失败详细原因"
+        open={errorModalVisible}
+        onCancel={() => setErrorModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setErrorModalVisible(false)}>
+            关闭
+          </Button>,
+        ]}
+        width={800}
+      >
+        <div
+          style={{
+            background: "#fff1f0",
+            padding: "16px 24px",
+            borderRadius: 4,
+            border: "1px solid #ffa39e",
+            maxHeight: "500px",
+            overflowY: "auto",
+          }}
+        >
+          <Paragraph
+            copyable
+            style={{
+              margin: 0,
+              whiteSpace: "pre-wrap",
+              fontFamily: "monospace",
+              fontSize: "13px",
+            }}
+          >
+            {currentError}
+          </Paragraph>
+        </div>
+      </Modal>
     </div>
   );
 };
