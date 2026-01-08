@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { addSyncJob } from "@/src/queue/syncQueue";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try {
     const { tenantId, entityType, environment } = await request.json();

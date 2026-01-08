@@ -328,7 +328,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
               size="small"
               loading={loadingLogs}
               pagination={{ pageSize: 5 }}
-              rowKey="filename"
+              rowKey="id"
             />
           </Card>
         </Col>
