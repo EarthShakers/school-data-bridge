@@ -19,17 +19,35 @@ export async function GET(request: Request) {
 
     if (row) {
       // 组装回原本的 SchoolConfig 结构（用于编辑器显示）
+      // 注意：从 DB 读取的 json 字段，knex 会自动解析为对象/数组
       const config = {
         tenantId: row.tenant_id,
         entityType: row.entity_type,
-        dataSource: row.data_source,
-        fieldMap: row.field_map,
-        batchConfig: row.batch_config,
-        syncConfig: row.sync_config,
+        dataSource: typeof row.data_source === "string" ? JSON.parse(row.data_source) : row.data_source,
+        fieldMap: typeof row.field_map === "string" ? JSON.parse(row.field_map) : row.field_map,
+        batchConfig: typeof row.batch_config === "string" ? JSON.parse(row.batch_config) : row.batch_config,
+        syncConfig: typeof row.sync_config === "string" ? JSON.parse(row.sync_config) : row.sync_config,
       };
       return NextResponse.json({ content: JSON.stringify(config, null, 2) });
     } else {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      // 如果没有配置，返回一个默认模板
+      const defaultConfig = {
+        tenantId,
+        entityType,
+        dataSource: {
+          type: "db",
+          config: {
+            dbType: "mysql",
+            connectionString: "",
+            modelName: "YourTableName",
+            batchSize: 100,
+          },
+        },
+        fieldMap: [],
+        batchConfig: { batchSize: 100, retryTimes: 3 },
+        syncConfig: { enabled: false, cron: "0 0 * * *", priority: 10 },
+      };
+      return NextResponse.json({ content: JSON.stringify(defaultConfig, null, 2) });
     }
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

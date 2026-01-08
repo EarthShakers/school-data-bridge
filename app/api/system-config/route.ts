@@ -1,32 +1,42 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import { getSystemEnvironments } from "@/src/saveData/config";
-
-const SYSTEM_CONFIG_PATH = path.join(process.cwd(), "config", "systemConfig.json5");
+import { metadataDb } from "@/src/utils/metadataDb";
 
 export async function GET() {
-  const envs = getSystemEnvironments();
+  const envs = await getSystemEnvironments();
   return NextResponse.json({ environments: envs });
 }
 
 export async function POST(request: Request) {
   try {
     const { environments } = await request.json();
-    
+
     if (!Array.isArray(environments)) {
-      return NextResponse.json({ error: "Environments must be an array" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Environments must be an array" },
+        { status: 400 }
+      );
     }
 
-    const dir = path.dirname(SYSTEM_CONFIG_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    fs.writeFileSync(SYSTEM_CONFIG_PATH, JSON.stringify({ environments }, null, 2), "utf-8");
+    // 数据库驱动：使用事务更新环境配置
+    await metadataDb.transaction(async (trx) => {
+      // 1. 清空旧数据
+      await trx("bridge_system_environments").del();
+      // 2. 插入新数据
+      if (environments.length > 0) {
+        await trx("bridge_system_environments").insert(
+          environments.map((e: any) => ({
+            id: e.id,
+            name: e.name,
+            url: e.url,
+          }))
+        );
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("[API System Config POST Error]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

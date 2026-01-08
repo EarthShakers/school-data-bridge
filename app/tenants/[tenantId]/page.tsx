@@ -14,12 +14,28 @@ export default function TenantDetailPage() {
   const tenantId = params.tenantId as string;
   const [tenantInfo, setTenantInfo] = useState<any>(null);
 
+  // 强制显示 5 个标准实体类型
+  const standardEntities = [
+    "teacher",
+    "student",
+    "teacherOrganizations",
+    "studentOrganizations",
+    "class",
+  ];
+
   const fetchTenantData = () => {
-    fetch("/api/tenants")
+    fetch(`/api/tenant-detail?tenantId=${tenantId}`)
       .then((res) => res.json())
       .then((data) => {
-        const found = data.tenants.find((t: any) => t.tenantId === tenantId);
-        setTenantInfo(found);
+        if (!data.error) {
+          setTenantInfo(data);
+        } else {
+          // 如果找不到，至少保留基础 ID
+          setTenantInfo({ tenantId });
+        }
+      })
+      .catch(() => {
+        setTenantInfo({ tenantId });
       });
   };
 
@@ -29,7 +45,7 @@ export default function TenantDetailPage() {
 
   if (!tenantInfo) return <div>加载中...</div>;
 
-  const tabItems = tenantInfo.entities.map((entity: string) => ({
+  const tabItems = standardEntities.map((entity: string) => ({
     key: entity,
     label: entity.toUpperCase(),
     children: <EntityConsole tenantId={tenantId} entityType={entity} />,

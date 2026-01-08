@@ -55,11 +55,15 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
     try {
       const res = await fetch("/api/system-config");
       const data = await res.json();
-      if (data.environments) {
+      if (data.environments && data.environments.length > 0) {
         setEnvs(data.environments);
+        // 如果还没有选环境，默认选中第一个
+        if (!targetEnv) {
+          setTargetEnv(data.environments[0].id);
+        }
       }
     } catch (e) {
-      console.error("Failed to fetch envs");
+      console.error("Failed to fetch envs", e);
     }
   };
 
@@ -107,10 +111,10 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
     }
   };
 
-  const viewLogDetail = async (filename: string) => {
+  const viewLogDetail = async (logId: number) => {
     try {
       const res = await fetch(
-        `/api/logs?tenantId=${tenantId}&entityType=${entityType}&filename=${filename}`
+        `/api/logs?tenantId=${tenantId}&entityType=${entityType}&id=${logId}`
       );
       const data = await res.json();
       setSelectedLog(data);
@@ -181,7 +185,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
         <Button
           size="small"
           type="link"
-          onClick={() => viewLogDetail(record.filename)}
+          onClick={() => viewLogDetail(record.id)}
         >
           详情
         </Button>
@@ -269,11 +273,12 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                 value={targetEnv}
                 onChange={setTargetEnv}
               >
-                {envs.map((env) => (
-                  <Option key={env.id} value={env.id}>
-                    {env.name}
-                  </Option>
-                ))}
+                {envs.length > 0 &&
+                  envs.map((env) => (
+                    <Option key={env.id} value={env.id}>
+                      {env.name}
+                    </Option>
+                  ))}
               </Select>
             </div>
             <Paragraph>

@@ -2,7 +2,7 @@ import { getSchoolConfig } from "../mapping/localAdapter";
 import { fetchData } from "../dataImport";
 import { transformAndValidate } from "./pipeline";
 import { writeToInternalJavaService } from "../saveData/javaService";
-import { saveImportResult } from "../utils/fileLogger";
+import { saveImportResultToDb } from "../utils/dbLogger"; // 修改为 DB Logger
 import { baseConfig, getEndpointForEntity } from "../saveData/config";
 import { EntityType } from "../types";
 
@@ -132,8 +132,8 @@ export async function runSyncTask(
       }
     }
 
-    // 6. 最终日志保存
-    saveImportResult(
+    // 6. 最终日志保存到数据库
+    await saveImportResultToDb(
       tenantId,
       entityType,
       taskTraceId,
@@ -152,7 +152,20 @@ export async function runSyncTask(
       failed: totalFailed + finalStages.write.failed,
     };
   } catch (error: any) {
-    console.error(`[Executor] ❌ Fatal Error:`, error.message);
+    console.error(
+      `[Executor] ❌ Fatal Error: ${tenantId}:${entityType} ->`,
+      error.message
+    );
+    // 即使失败，也尝试保存当前已处理的记录
+    if (allCollectedRecords.length > 0) {
+      await saveImportResultToDb(
+        tenantId,
+        entityType,
+        `error-${Date.now()}`,
+        allCollectedRecords,
+        finalStages
+      );
+    }
     throw error;
   }
 }
