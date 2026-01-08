@@ -7,7 +7,7 @@ services:
     container_name: bridge-web
     restart: always
     ports:
-      - "3000:3000"
+      - "9235:3000" # 👈 将宿主机的 3001 映射到容器的 3000
     environment:
       - RUN_MODE=manual
       - REDIS_HOST=${REDIS_HOST}
