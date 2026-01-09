@@ -27,7 +27,8 @@ export async function runSyncTask(
   let totalWritten = 0;
   let totalFailed = 0;
   let allCollectedRecords: any[] = [];
-  let rawDataSample: any[] = []; // 新增：采样原始数据
+  let rawDataSample: any[] = [];
+  let lastWriteFailure: any = null; // 新增：保存最后的写入失败详情
   let finalStages = {
     fetch: { total: 0, status: "success" },
     transform: { success: 0, failed: 0 },
@@ -74,9 +75,13 @@ export async function runSyncTask(
         break;
       }
 
-      // 采集原始数据样本 (捕获第一批次的所有数据，以便全量比对)
-      if (rawDataSample.length === 0) {
-        rawDataSample = Array.isArray(rawData) ? [...rawData] : [rawData];
+      // 采集原始数据样本 (限制采集前 500 条，防止数据库超限，同时也覆盖了大多数场景)
+      if (rawDataSample.length < 500) {
+        const sample = Array.isArray(rawData) ? rawData : [rawData];
+        rawDataSample.push(...sample);
+        if (rawDataSample.length > 500) {
+          rawDataSample = rawDataSample.slice(0, 500);
+        }
       }
 
       // 3. 转换与校验
@@ -108,6 +113,10 @@ export async function runSyncTask(
           authToken: config.javaAuthToken,
           entityType: config.entityType,
         });
+
+        if (javaResult.debugInfo) {
+          lastWriteFailure = javaResult.debugInfo;
+        }
 
         // 🚨 核心：如果 Java 写入有失败，需要将失败原因反向同步到 batchRecords 中，以便最终入库
         if (javaResult.errors.length > 0) {
@@ -183,7 +192,8 @@ export async function runSyncTask(
       taskTraceId,
       allCollectedRecords,
       finalStages,
-      rawDataSample // 传入样本
+      rawDataSample,
+      lastWriteFailure // 传入失败详情
     );
 
     console.log(
@@ -216,7 +226,8 @@ export async function runSyncTask(
         transform: finalStages.transform,
         write: finalStages.write,
       },
-      rawDataSample // 传入样本
+      rawDataSample,
+      lastWriteFailure
     );
     throw error;
   }

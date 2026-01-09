@@ -14,7 +14,8 @@ export async function saveImportResultToDb(
     transform: { success: number; failed: number };
     write: { success: number; failed: number };
   },
-  rawDataSample?: any[] // 新增：原始数据样本
+  rawDataSample?: any[],
+  writeFailureDetails?: any // 新增
 ) {
   const successData = allRecords.filter((r) => r._importStatus === "success");
   const failedData = allRecords.filter((r) => r._importStatus === "failed");
@@ -36,10 +37,18 @@ export async function saveImportResultToDb(
     ({ _importStatus, _importError, _metadata, ...rest }) => rest
   );
 
-  const failedDataWithReason = failedData.map(({ _importStatus, _importError, _metadata, ...rest }) => ({
-    data: rest,
-    reason: _importError,
-  }));
+  const failedDataWithReason = failedData.map(({ _importStatus, _importError, _metadata, ...rest }) => {
+    // 🔧 优化转换失败原因的提取，使其更易读
+    let reason = _importError;
+    if (typeof _importError === 'object' && _importError._errors) {
+       reason = JSON.stringify(_importError);
+    }
+    
+    return {
+      data: rest,
+      reason: reason,
+    };
+  });
 
   try {
     const dataToSave: any = {
@@ -55,6 +64,10 @@ export async function saveImportResultToDb(
 
     if (rawDataSample) {
       dataToSave.raw_data_sample = JSON.stringify(rawDataSample);
+    }
+    
+    if (writeFailureDetails) {
+      dataToSave.write_failure_details = JSON.stringify(writeFailureDetails);
     }
 
     // 尝试更新现有记录

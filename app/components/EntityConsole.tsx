@@ -19,6 +19,7 @@ import {
   Form,
   Input,
   message,
+  Tabs,
 } from "antd";
 import {
   SettingOutlined,
@@ -32,6 +33,8 @@ import {
   DatabaseOutlined,
   ArrowRightOutlined,
   CheckCircleOutlined,
+  BugOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import dynamic from "next/dynamic";
 import { loader } from "@monaco-editor/react";
@@ -423,160 +426,265 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       <Modal
         title={
           <Title level={4} style={{ margin: 0 }}>
-            同步全流程详情 [TraceID: {selectedLog?.traceId}]
+            同步详情 [TraceID: {selectedLog?.traceId}]
           </Title>
         }
         open={logModalVisible}
         onCancel={() => setLogModalVisible(false)}
         footer={null}
-        width={1100}
+        width={1200}
       >
         {selectedLog && (
-          <div>
-            <div style={{ padding: "20px 0 30px" }}>
-              <Steps
-                current={3}
-                items={[
-                  {
-                    title: "1. 抓取元数据",
-                    description: `获取原始记录: ${
-                      selectedLog.stages?.fetch?.total || 0
-                    }`,
-                    status:
-                      selectedLog.stages?.fetch?.status === "success"
-                        ? "finish"
-                        : "error",
-                  },
-                  {
-                    title: "2. 数据转换校验",
-                    description: `合法: ${
-                      selectedLog.stages?.transform?.success || 0
-                    } / 非法: ${selectedLog.stages?.transform?.failed || 0}`,
-                    status:
-                      (selectedLog.stages?.transform?.failed || 0) > 0
-                        ? "error"
-                        : "finish",
-                  },
-                  {
-                    title: "3. 写入 Java 服务",
-                    description: `成功: ${
-                      selectedLog.stages?.write?.success || 0
-                    } / 失败: ${selectedLog.stages?.write?.failed || 0}`,
-                    status:
-                      (selectedLog.stages?.write?.failed || 0) > 0
-                        ? "error"
-                        : "finish",
-                  },
-                ]}
-              />
-            </div>
+          <Tabs
+            defaultActiveKey="overview"
+            items={[
+              {
+                key: "overview",
+                label: "执行概览",
+                children: (
+                  <div>
+                    <div style={{ padding: "20px 0 30px" }}>
+                      <Steps
+                        current={3}
+                        items={[
+                          {
+                            title: "1. 抓取元数据",
+                            description: `获取原始记录: ${
+                              selectedLog.stages?.fetch?.total || 0
+                            }`,
+                            status:
+                              selectedLog.stages?.fetch?.status === "success"
+                                ? "finish"
+                                : "error",
+                          },
+                          {
+                            title: "2. 数据转换校验",
+                            description: `合法: ${
+                              selectedLog.stages?.transform?.success || 0
+                            } / 非法: ${
+                              selectedLog.stages?.transform?.failed || 0
+                            }`,
+                            status:
+                              (selectedLog.stages?.transform?.failed || 0) > 0
+                                ? "error"
+                                : "finish",
+                          },
+                          {
+                            title: "3. 写入 Java 服务",
+                            description: `成功: ${
+                              selectedLog.stages?.write?.success || 0
+                            } / 失败: ${
+                              selectedLog.stages?.write?.failed || 0
+                            }`,
+                            status:
+                              (selectedLog.stages?.write?.failed || 0) > 0
+                                ? "error"
+                                : "finish",
+                          },
+                        ]}
+                      />
+                    </div>
 
-            <Row gutter={16}>
-              <Col span={8}>
-                <Divider orientation="left">
-                  <DatabaseOutlined /> 1. 抓取元数据样本
-                </Divider>
-                <div
-                  style={{
-                    background: "#f0f2f5",
-                    padding: 12,
-                    borderRadius: 4,
-                    height: 400,
-                    overflow: "auto",
-                  }}
-                >
-                  {selectedLog.rawDataSample &&
-                  selectedLog.rawDataSample.length > 0 ? (
-                    <pre style={{ fontSize: 11 }}>
-                      {JSON.stringify(selectedLog.rawDataSample, null, 2)}
-                    </pre>
-                  ) : (
-                    <Empty description="未采集到元数据" />
-                  )}
-                </div>
-              </Col>
-              <Col span={1}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    height: "100%",
-                    justifyContent: "center",
-                  }}
-                >
-                  <ArrowRightOutlined
-                    style={{ color: "#bfbfbf", fontSize: 20 }}
-                  />
-                </div>
-              </Col>
-              <Col span={7}>
-                <Divider orientation="left">
-                  <CheckCircleOutlined /> 2. 转换后全量数据 (待写入)
-                </Divider>
-                <div
-                  style={{
-                    background: "#f6ffed",
-                    padding: 12,
-                    borderRadius: 4,
-                    height: 400,
-                    overflow: "auto",
-                    border: "1px solid #b7eb8f",
-                  }}
-                >
-                  {selectedLog.successData &&
-                  selectedLog.successData.length > 0 ? (
-                    <pre style={{ fontSize: 11 }}>
-                      {JSON.stringify(
-                        selectedLog.successData, // 移除了 .slice(0, 3)
-                        null,
-                        2
-                      )}
-                    </pre>
-                  ) : (
-                    <Empty description="无转换成功数据" />
-                  )}
-                </div>
-              </Col>
-              <Col span={8}>
-                <Divider orientation="left">
-                  <Text type="danger">3. 失败记录原因</Text>
-                </Divider>
-                <div style={{ height: 400, overflow: "auto" }}>
-                  {selectedLog.failedData &&
-                  selectedLog.failedData.length > 0 ? (
-                    <Table
-                      dataSource={selectedLog.failedData
-                        .slice(0, 20)
-                        .map((d: any, i: number) => ({ ...d, key: i }))}
-                      size="small"
-                      pagination={false}
-                      columns={[
-                        { title: "ID", dataIndex: ["data", "id"], width: 80 },
-                        {
-                          title: "错误原因",
-                          dataIndex: "reason",
-                          render: (r) => (
-                            <Text type="danger" style={{ fontSize: 11 }}>
-                              {typeof r === "string" ? r : JSON.stringify(r)}
-                            </Text>
-                          ),
-                        },
-                      ]}
-                    />
-                  ) : (
-                    <Empty description="没有失败记录" />
-                  )}
-                </div>
-              </Col>
-            </Row>
-
-            <div style={{ marginTop: 24, textAlign: "right" }}>
-              <Text type="secondary">
-                同步开始时间:{" "}
-                {dayjs(selectedLog.time).format("YYYY-MM-DD HH:mm:ss")}
-              </Text>
-            </div>
-          </div>
+                    <Row gutter={16}>
+                      <Col span={8}>
+                        <Divider orientation="left">
+                          <DatabaseOutlined /> 1. 抓取元数据样本 (前500条)
+                        </Divider>
+                        <div
+                          style={{
+                            background: "#f0f2f5",
+                            padding: 12,
+                            borderRadius: 4,
+                            height: 400,
+                            overflow: "auto",
+                          }}
+                        >
+                          {selectedLog.rawDataSample &&
+                          selectedLog.rawDataSample.length > 0 ? (
+                            <pre style={{ fontSize: 11 }}>
+                              {JSON.stringify(
+                                selectedLog.rawDataSample,
+                                null,
+                                2
+                              )}
+                            </pre>
+                          ) : (
+                            <Empty description="未采集到元数据" />
+                          )}
+                        </div>
+                      </Col>
+                      <Col span={1}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            height: "100%",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <ArrowRightOutlined
+                            style={{ color: "#bfbfbf", fontSize: 20 }}
+                          />
+                        </div>
+                      </Col>
+                      <Col span={7}>
+                        <Divider orientation="left">
+                          <CheckCircleOutlined /> 2. 转换成功数据
+                        </Divider>
+                        <div
+                          style={{
+                            background: "#f6ffed",
+                            padding: 12,
+                            borderRadius: 4,
+                            height: 400,
+                            overflow: "auto",
+                            border: "1px solid #b7eb8f",
+                          }}
+                        >
+                          {selectedLog.successData &&
+                          selectedLog.successData.length > 0 ? (
+                            <pre style={{ fontSize: 11 }}>
+                              {JSON.stringify(selectedLog.successData, null, 2)}
+                            </pre>
+                          ) : (
+                            <Empty description="无转换成功数据" />
+                          )}
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <Divider orientation="left">
+                          <ExclamationCircleOutlined
+                            style={{ color: "#ff4d4f" }}
+                          />{" "}
+                          3. 转换失败详情
+                        </Divider>
+                        <div style={{ height: 400, overflow: "auto" }}>
+                          {selectedLog.failedData &&
+                          selectedLog.failedData.length > 0 ? (
+                            <Table
+                              dataSource={selectedLog.failedData.map(
+                                (d: any, i: number) => ({ ...d, key: i })
+                              )}
+                              size="small"
+                              pagination={{ pageSize: 10 }}
+                              columns={[
+                                {
+                                  title: "记录 ID",
+                                  dataIndex: ["data", "id"],
+                                  width: 100,
+                                },
+                                {
+                                  title: "失败原因 (Zod Error)",
+                                  dataIndex: "reason",
+                                  render: (r) => (
+                                    <Paragraph
+                                      ellipsis={{
+                                        rows: 2,
+                                        expandable: true,
+                                        symbol: "展开",
+                                      }}
+                                      style={{
+                                        fontSize: 11,
+                                        color: "#ff4d4f",
+                                        margin: 0,
+                                      }}
+                                    >
+                                      {typeof r === "string"
+                                        ? r
+                                        : JSON.stringify(r)}
+                                    </Paragraph>
+                                  ),
+                                },
+                              ]}
+                            />
+                          ) : (
+                            <Empty description="没有失败记录" />
+                          )}
+                        </div>
+                      </Col>
+                    </Row>
+                  </div>
+                ),
+              },
+              {
+                key: "debug",
+                label: (
+                  <span>
+                    <BugOutlined /> Java 接口排查
+                  </span>
+                ),
+                children: (
+                  <div>
+                    {selectedLog.writeFailureDetails ? (
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Divider orientation="left">
+                            发送 Payload 报文
+                          </Divider>
+                          <div
+                            style={{
+                              background: "#1e1e1e",
+                              color: "#d4d4d4",
+                              padding: 12,
+                              borderRadius: 4,
+                              height: 500,
+                              overflow: "auto",
+                            }}
+                          >
+                            <pre style={{ fontSize: 12 }}>
+                              {JSON.stringify(
+                                selectedLog.writeFailureDetails.lastPayload,
+                                null,
+                                2
+                              )}
+                            </pre>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <Divider orientation="left">
+                            Java 返回 Response
+                          </Divider>
+                          <div
+                            style={{
+                              background: "#1e1e1e",
+                              color: "#ce9178",
+                              padding: 12,
+                              borderRadius: 4,
+                              height: 500,
+                              overflow: "auto",
+                            }}
+                          >
+                            <pre style={{ fontSize: 12 }}>
+                              {JSON.stringify(
+                                selectedLog.writeFailureDetails.lastResponse,
+                                null,
+                                2
+                              )}
+                            </pre>
+                          </div>
+                        </Col>
+                      </Row>
+                    ) : (
+                      <div style={{ padding: 40, textAlign: "center" }}>
+                        <CheckCircleOutlined
+                          style={{
+                            fontSize: 48,
+                            color: "#52c41a",
+                            marginBottom: 16,
+                          }}
+                        />
+                        <Title level={5}>此任务没有 Java 接口级报错</Title>
+                        <Text type="secondary">
+                          如果统计显示写入失败，通常是由于部分数据未通过 Java
+                          的业务校验，请查看概览页的失败详情。
+                        </Text>
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
         )}
       </Modal>
     </div>

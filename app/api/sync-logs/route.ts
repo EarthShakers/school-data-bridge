@@ -52,6 +52,10 @@ export async function GET(request: Request) {
                   typeof log.raw_data_sample === "string"
                     ? JSON.parse(log.raw_data_sample)
                     : log.raw_data_sample,
+                writeFailureDetails:
+                  typeof log.write_failure_details === "string"
+                    ? JSON.parse(log.write_failure_details)
+                    : log.write_failure_details,
                 time: log.created_at,
               });
     }
