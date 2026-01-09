@@ -10,7 +10,7 @@ export async function saveImportResultToDb(
   traceId: string,
   allRecords: any[],
   stageStats?: {
-    fetch: { total: number; status: string };
+    fetch: { total: number; status: string; reason?: string }; // 新增 reason
     transform: { success: number; failed: number };
     write: { success: number; failed: number };
   }
@@ -19,7 +19,7 @@ export async function saveImportResultToDb(
   const failedData = allRecords.filter((r) => r._importStatus === "failed");
 
   const summary = {
-    total: allRecords.length,
+    total: allRecords.length || stageStats?.fetch?.total || 0,
     success: successData.length,
     failed: failedData.length,
   };

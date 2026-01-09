@@ -23,17 +23,9 @@ export async function fetchFromExternalApi(
 
   console.log(`[ApiAdapter] 🌐 Fetching from API for ${tenantId || 'Unknown'}:${entityType || 'Unknown'} -> ${url}`);
 
-  // 🧪 Mock 逻辑
+  // 严格校验 URL，不再静默进入 Mock
   if (!url || url.includes("example.com")) {
-    console.log(
-      `[ApiAdapter] 🧪 Using mock data for ${tenantId} (${config.entityType})`
-    );
-    return {
-      traceId,
-      tenantId,
-      rawData:
-        config.entityType === "student" ? studentMockData : teacherMockData,
-    };
+    throw new Error(`[ApiAdapter] ❌ 无效的 API URL: ${url || "空"}。请在配置中设置真实的接口地址。`);
   }
 
   try {

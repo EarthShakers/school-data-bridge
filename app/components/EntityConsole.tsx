@@ -230,8 +230,21 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
           fetchStatus === "failed" ||
           record.stages?.write?.failed > 0;
 
+        const errorReason = record.stages?.fetch?.reason;
+
         return hasError ? (
-          <Badge status="error" text="异常" />
+          <Space>
+            <Badge status="error" text="异常" />
+            {errorReason && (
+              <Text
+                type="danger"
+                style={{ fontSize: 11, maxWidth: 100 }}
+                ellipsis={{ tooltip: errorReason }}
+              >
+                ({errorReason})
+              </Text>
+            )}
+          </Space>
         ) : (
           <Badge status="success" text="完成" />
         );

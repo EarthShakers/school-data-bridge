@@ -33,19 +33,12 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
 
   const traceId = uuidv4();
 
-  console.log(
-    `[DbAdapter] 🚀 Fetching from DB for ${tenantId || "Unknown"}:${
-      entityType || "Unknown"
-    }. Mode: ${viewName ? "View" : sql ? "SQL" : "Model"}`
-  );
-
-  // 🧪 Mock 逻辑判定：现在只在连接信息完全缺失且明确想要 Mock 时才使用
+  // 严格校验连接信息，不通过则直接报错，防止进入 Mock 逻辑
   const hasConnection = connectionString || (host && user && (database || sid));
 
   if (!hasConnection) {
-    // 如果没有任何连接信息，直接报错，不再静默回退到 Mock
     throw new Error(
-      `[DbAdapter] ❌ 无法连接数据库: 租户 ${tenantId} 的 ${entityType} 配置缺失连接参数 (ConnectionString 或 Host/User/Pass)。请检查 UI 中的“共享资源配置”是否保存。`
+      `[DbAdapter] ❌ 无法连接数据库：缺失连接参数。请检查租户【共享资源配置】。`
     );
   }
 
@@ -148,20 +141,28 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
         }
       } else {
         // 兼容 PostgreSQL/Oracle 的 .rows 包装
-        rawData = result.rows || result.results || result;
+        rawData =
+          result.rows ||
+          result.results ||
+          (Array.isArray(result) ? result : [result]);
       }
-
-      console.log(
-        `[DbAdapter] ✅ Successfully fetched ${
-          Array.isArray(rawData) ? rawData.length : 1
-        } records from DB using raw SQL.`
+    } else {
+      throw new Error(
+        "[DbAdapter] At least one of viewName, modelName, or sql must be provided"
       );
-      return {
-        traceId,
-        tenantId,
-        rawData,
-      };
     }
+
+    console.log(
+      `[DbAdapter] ✅ Successfully fetched ${
+        Array.isArray(rawData) ? rawData.length : 0
+      } records from DB.`
+    );
+
+    return {
+      traceId,
+      tenantId,
+      rawData,
+    };
   } catch (error: any) {
     console.error(
       `[DbAdapter] Failed to fetch from DB for ${tenantId}:`,

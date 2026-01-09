@@ -91,7 +91,7 @@ export async function runSyncTask(
         .map(({ _importStatus, _importError, _metadata, ...rest }) => rest);
 
       if (dataToWrite.length > 0) {
-        const stats = await writeToInternalJavaService(dataToWrite, {
+        const javaResult = await writeToInternalJavaService(dataToWrite, {
           batchSize:
             config.batchConfig.batchSize || baseConfig.DEFAULT_BATCH_SIZE,
           concurrency: Math.max(1, baseConfig.MAX_GLOBAL_CONCURRENCY / 2),
@@ -99,11 +99,38 @@ export async function runSyncTask(
             config.entityType,
             environment
           ),
-          authToken: config.javaAuthToken, // 传入租户配置的 Token
+          authToken: config.javaAuthToken,
+          entityType: config.entityType,
         });
-        totalWritten += stats.success;
-        finalStages.write.success += stats.success;
-        finalStages.write.failed += stats.failed;
+
+        // 🚨 核心：如果 Java 写入有失败，需要将失败原因反向同步到 batchRecords 中，以便最终入库
+        if (javaResult.errors.length > 0) {
+          javaResult.errors.forEach((javaErr) => {
+            // 在当前批次中找到对应的记录
+            const record = batchRecords.find((r) => r.id === javaErr.id);
+            if (record) {
+              record._importStatus = "failed";
+              record._importError = javaErr.message;
+            }
+          });
+
+          // 重新统计本批次成功/失败（因为 Java 侧可能拒绝了部分原本转换成功的记录）
+          const finalBatchSuccess = batchRecords.filter(
+            (r) => r._importStatus === "success"
+          ).length;
+          const finalBatchFailed = batchRecords.filter(
+            (r) => r._importStatus === "failed"
+          ).length;
+
+          finalStages.transform.success =
+            finalStages.transform.success - successCount + finalBatchSuccess;
+          finalStages.transform.failed =
+            finalStages.transform.failed - failedCount + finalBatchFailed;
+        }
+
+        totalWritten += javaResult.success;
+        finalStages.write.success += javaResult.success;
+        finalStages.write.failed += javaResult.failed;
       }
 
       totalProcessed += currentBatchSize;
@@ -174,7 +201,11 @@ export async function runSyncTask(
       taskTraceId,
       allCollectedRecords,
       {
-        fetch: { total: finalStages.fetch.total, status: "failed" },
+        fetch: {
+          total: finalStages.fetch.total,
+          status: "failed",
+          reason: error.message, // 记录具体的错误原因
+        },
         transform: finalStages.transform,
         write: finalStages.write,
       }
