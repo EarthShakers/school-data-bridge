@@ -17,8 +17,19 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
   }
 
   const { dataSource, tenantId, entityType } = config;
-  const { dbType, viewName, sql, modelName, connectionString } =
-    dataSource.config;
+  const {
+    dbType,
+    viewName,
+    sql,
+    modelName,
+    connectionString,
+    host,
+    port,
+    user,
+    password,
+    database,
+    sid,
+  } = dataSource.config;
 
   const traceId = uuidv4();
 
@@ -28,12 +39,14 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
     }. Mode: ${viewName ? "View" : sql ? "SQL" : "Model"}`
   );
 
-  // 🧪 Mock 逻辑判断：只有当连接字符串明确为空时才使用 Mock
-  const isMock = !connectionString || connectionString === "";
+  // 🧪 Mock 逻辑判断：如果连接信息（字符串或分项参数）完全缺失，则使用 Mock
+  const hasConnection =
+    connectionString || (host && user && (database || sid));
+  const isMock = !hasConnection;
 
   if (isMock) {
     console.log(
-      `[DbAdapter] 🧪 Using mock data. Reason: Empty connection string`
+      `[DbAdapter] 🧪 Using mock data. Reason: No connection parameters provided.`
     );
     return {
       traceId,
@@ -57,25 +70,34 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
 
   const client = clientMap[dbType] || dbType;
 
-  // 智能识别连接参数：可能是字符串，也可能是包含 Host/User 的对象
-  let connectionConfig: any = connectionString;
-  
-  // 如果没有 connectionString 但有分项参数（这通常来自合并后的配置）
-  if (!connectionString && (config as any).dbHost) {
-    const c = config as any;
-    connectionConfig = {
-      host: c.dbHost,
-      port: Number(c.dbPort),
-      user: c.dbUser,
-      password: c.dbPass,
-      database: c.dbName,
+  // 构造 Knex 连接配置
+  let knexConnection: any;
+  if (connectionString) {
+    knexConnection = connectionString;
+  } else {
+    knexConnection = {
+      host,
+      port: Number(port),
+      user,
+      password,
+      database,
     };
+
+    // PostgreSQL SSL 支持
+    if (dbType === "postgresql") {
+      knexConnection.ssl = { rejectUnauthorized: false };
+    }
+
+    // Oracle SID 支持
+    if (dbType === "oracle" && sid) {
+      knexConnection.connectString = `${host}:${port}:${sid}`;
+    }
   }
 
   // 创建临时连接池
   const db = knex({
     client,
-    connection: connectionConfig,
+    connection: knexConnection,
     pool: { min: 0, max: 1 },
   });
 

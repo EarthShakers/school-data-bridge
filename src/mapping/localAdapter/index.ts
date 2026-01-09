@@ -44,6 +44,13 @@ export async function getSchoolConfig(
     dbConfig.dbType = dbConfig.dbType || commonConfig.dbType;
     dbConfig.connectionString =
       dbConfig.connectionString || commonConfig.dbConnection;
+
+    // 合并分项参数
+    dbConfig.host = dbConfig.host || commonConfig.dbHost;
+    dbConfig.port = dbConfig.port || commonConfig.dbPort;
+    dbConfig.user = dbConfig.user || commonConfig.dbUser;
+    dbConfig.password = dbConfig.password || commonConfig.dbPass;
+    dbConfig.database = dbConfig.database || commonConfig.dbName;
   } else if (mergedConfig.dataSource.type === "api") {
     const apiConfig = mergedConfig.dataSource.config;
     if (commonConfig.apiBaseUrl && apiConfig.url?.startsWith("/")) {

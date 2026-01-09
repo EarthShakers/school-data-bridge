@@ -44,7 +44,13 @@ export interface DbDataSource {
   type: "db";
   config: {
     dbType: "mysql" | "postgresql" | "oracle" | "sqlserver";
-    connectionString: string;
+    connectionString?: string;
+    host?: string;
+    port?: number | string;
+    user?: string;
+    password?: string;
+    database?: string;
+    sid?: string; // Oracle SID
     viewName?: string;
     sql?: string;
     modelName?: string;
