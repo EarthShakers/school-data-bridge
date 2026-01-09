@@ -68,11 +68,11 @@ export async function transformAndValidate(
         _metadata: { traceId, tenantId, index },
       });
     } else {
-      // 🔧 修复：不再过滤，而是保留原始/转换后的数据并附加失败原因
+      // 🔧 改进：增加 [数据校验] 前缀
       allRecords.push({
-        ...item, // 转换后的中间数据
+        ...item,
         _importStatus: "failed",
-        _importError: validation.error.format(),
+        _importError: `[数据校验] ${JSON.stringify(validation.error.format())}`,
         _metadata: { traceId, tenantId, index },
       });
     }

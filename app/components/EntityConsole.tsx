@@ -20,6 +20,7 @@ import {
   Input,
   message,
   Tabs,
+  Tag,
 } from "antd";
 import {
   SettingOutlined,
@@ -35,6 +36,7 @@ import {
   CheckCircleOutlined,
   BugOutlined,
   ExclamationCircleOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import dynamic from "next/dynamic";
 import { loader } from "@monaco-editor/react";
@@ -43,13 +45,8 @@ import JSON5 from "json5";
 import { EnvironmentConfig } from "@/src/saveData/config";
 import { useRouter } from "next/navigation";
 
-// 配置 Monaco 使用本地资源
 if (typeof window !== "undefined") {
-  loader.config({
-    paths: {
-      vs: window.location.origin + "/monaco-vs",
-    },
-  });
+  loader.config({ paths: { vs: window.location.origin + "/monaco-vs" } });
 }
 
 const Editor = dynamic(() => import("@monaco-editor/react"), {
@@ -98,9 +95,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       const data = await res.json();
       if (data.environments) {
         setEnvs(data.environments);
-        if (!targetEnv && data.environments.length > 0) {
+        if (!targetEnv && data.environments.length > 0)
           setTargetEnv(data.environments[0].id);
-        }
       }
     } catch (err) {
       message.error("获取环境列表失败");
@@ -170,7 +166,6 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       message.warning("请先选择目标环境");
       return;
     }
-
     message.loading(`正在触发同步 [${targetEnv}]...`, 0);
     try {
       const res = await fetch("/api/sync", {
@@ -182,9 +177,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       if (res.ok) {
         message.success(`同步任务 [${targetEnv}] 已加入队列`);
         setTimeout(fetchLogs, 2000);
-      } else {
-        message.error("任务触发失败");
-      }
+      } else message.error("任务触发失败");
     } catch (err) {
       message.destroy();
       message.error("网络错误");
@@ -214,13 +207,11 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
           return <Badge status="default" text="排队中..." />;
         if (fetchStatus === "running")
           return <Badge status="processing" text="执行中..." />;
-
         const hasError =
           record.summary?.failed > 0 ||
           fetchStatus === "failed" ||
           record.stages?.write?.failed > 0;
         const errorReason = record.stages?.fetch?.reason;
-
         return hasError ? (
           <Space>
             <Badge status="error" text="异常" />
@@ -240,21 +231,23 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       },
     },
     {
-      title: "统计 (成功/总数)",
+      title: "结果 (成功/总数)",
       key: "stat",
-      render: (record: any) => {
-        const success = record.stages?.write?.success ?? 0;
-        const total = record.summary?.total ?? 0;
-        return (
-          <Space>
-            <Text strong style={{ color: success > 0 ? "#52c41a" : "#999" }}>
-              {success}
-            </Text>
-            <Text type="secondary">/</Text>
-            <Text>{total}</Text>
-          </Space>
-        );
-      },
+      render: (record: any) => (
+        <Space>
+          <Text
+            strong
+            style={{
+              color:
+                (record.stages?.write?.success ?? 0) > 0 ? "#52c41a" : "#999",
+            }}
+          >
+            {record.stages?.write?.success ?? 0}
+          </Text>
+          <Text type="secondary">/</Text>
+          <Text>{record.summary?.total ?? 0}</Text>
+        </Space>
+      ),
     },
     {
       title: "操作",
@@ -284,6 +277,16 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       ),
     },
   ];
+
+  // 辅助函数：根据前缀拆分错误列表
+  const getFailedSublist = (type: "zod" | "java") => {
+    if (!selectedLog?.failedData) return [];
+    return selectedLog.failedData.filter((d: any) => {
+      const reason = d.reason || "";
+      if (type === "zod") return reason.includes("[数据校验]");
+      return reason.includes("[Java业务]");
+    });
+  };
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -385,7 +388,6 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
               立即执行手动同步
             </Button>
           </Card>
-
           <Card
             title={
               <div
@@ -432,7 +434,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
         open={logModalVisible}
         onCancel={() => setLogModalVisible(false)}
         footer={null}
-        width={1200}
+        width={1400}
       >
         {selectedLog && (
           <Tabs
@@ -448,8 +450,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                         current={3}
                         items={[
                           {
-                            title: "1. 抓取元数据",
-                            description: `获取原始记录: ${
+                            title: "1. 抓取数据",
+                            description: `记录: ${
                               selectedLog.stages?.fetch?.total || 0
                             }`,
                             status:
@@ -458,10 +460,10 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                                 : "error",
                           },
                           {
-                            title: "2. 数据转换校验",
-                            description: `合法: ${
+                            title: "2. 转换校验",
+                            description: `通过: ${
                               selectedLog.stages?.transform?.success || 0
-                            } / 非法: ${
+                            } / 失败: ${
                               selectedLog.stages?.transform?.failed || 0
                             }`,
                             status:
@@ -470,7 +472,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                                 : "finish",
                           },
                           {
-                            title: "3. 写入 Java 服务",
+                            title: "3. 写入后端",
                             description: `成功: ${
                               selectedLog.stages?.write?.success || 0
                             } / 失败: ${
@@ -486,22 +488,21 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                     </div>
 
                     <Row gutter={16}>
-                      <Col span={8}>
+                      <Col span={6}>
                         <Divider orientation="left">
-                          <DatabaseOutlined /> 1. 抓取元数据样本 (前500条)
+                          <DatabaseOutlined /> 1. 抓取元数据
                         </Divider>
                         <div
                           style={{
                             background: "#f0f2f5",
                             padding: 12,
                             borderRadius: 4,
-                            height: 400,
+                            height: 500,
                             overflow: "auto",
                           }}
                         >
-                          {selectedLog.rawDataSample &&
-                          selectedLog.rawDataSample.length > 0 ? (
-                            <pre style={{ fontSize: 11 }}>
+                          {selectedLog.rawDataSample ? (
+                            <pre style={{ fontSize: 10 }}>
                               {JSON.stringify(
                                 selectedLog.rawDataSample,
                                 null,
@@ -509,97 +510,96 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                               )}
                             </pre>
                           ) : (
-                            <Empty description="未采集到元数据" />
+                            <Empty description="未采集" />
                           )}
                         </div>
                       </Col>
-                      <Col span={1}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            height: "100%",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <ArrowRightOutlined
-                            style={{ color: "#bfbfbf", fontSize: 20 }}
-                          />
-                        </div>
-                      </Col>
-                      <Col span={7}>
+                      <Col span={6}>
                         <Divider orientation="left">
-                          <CheckCircleOutlined /> 2. 转换成功数据
+                          <CheckCircleOutlined /> 2. 写入成功记录
                         </Divider>
                         <div
                           style={{
                             background: "#f6ffed",
                             padding: 12,
                             borderRadius: 4,
-                            height: 400,
+                            height: 500,
                             overflow: "auto",
                             border: "1px solid #b7eb8f",
                           }}
                         >
-                          {selectedLog.successData &&
-                          selectedLog.successData.length > 0 ? (
-                            <pre style={{ fontSize: 11 }}>
+                          {selectedLog.successData?.length > 0 ? (
+                            <pre style={{ fontSize: 10 }}>
                               {JSON.stringify(selectedLog.successData, null, 2)}
                             </pre>
                           ) : (
-                            <Empty description="无转换成功数据" />
+                            <Empty description="无入库数据" />
                           )}
                         </div>
                       </Col>
-                      <Col span={8}>
+                      <Col span={6}>
+                        <Divider orientation="left">
+                          <WarningOutlined style={{ color: "#faad14" }} /> 3.
+                          Java 业务失败
+                        </Divider>
+                        <div style={{ height: 500, overflow: "auto" }}>
+                          <Table
+                            dataSource={getFailedSublist("java").map(
+                              (d: any, i: number) => ({ ...d, key: i })
+                            )}
+                            size="small"
+                            pagination={false}
+                            columns={[
+                              {
+                                title: "ID",
+                                dataIndex: ["data", "id"],
+                                width: 80,
+                              },
+                              {
+                                title: "Java 报错原因",
+                                dataIndex: "reason",
+                                render: (r) => (
+                                  <Text type="warning" style={{ fontSize: 10 }}>
+                                    {r.replace("[Java业务] ", "")}
+                                  </Text>
+                                ),
+                              },
+                            ]}
+                          />
+                        </div>
+                      </Col>
+                      <Col span={6}>
                         <Divider orientation="left">
                           <ExclamationCircleOutlined
                             style={{ color: "#ff4d4f" }}
                           />{" "}
-                          3. 转换失败详情
+                          4. Zod 校验失败
                         </Divider>
-                        <div style={{ height: 400, overflow: "auto" }}>
-                          {selectedLog.failedData &&
-                          selectedLog.failedData.length > 0 ? (
-                            <Table
-                              dataSource={selectedLog.failedData.map(
-                                (d: any, i: number) => ({ ...d, key: i })
-                              )}
-                              size="small"
-                              pagination={{ pageSize: 10 }}
-                              columns={[
-                                {
-                                  title: "记录 ID",
-                                  dataIndex: ["data", "id"],
-                                  width: 100,
-                                },
-                                {
-                                  title: "失败原因 (Zod Error)",
-                                  dataIndex: "reason",
-                                  render: (r) => (
-                                    <Paragraph
-                                      ellipsis={{
-                                        rows: 2,
-                                        expandable: true,
-                                        symbol: "展开",
-                                      }}
-                                      style={{
-                                        fontSize: 11,
-                                        color: "#ff4d4f",
-                                        margin: 0,
-                                      }}
-                                    >
-                                      {typeof r === "string"
-                                        ? r
-                                        : JSON.stringify(r)}
-                                    </Paragraph>
-                                  ),
-                                },
-                              ]}
-                            />
-                          ) : (
-                            <Empty description="没有失败记录" />
-                          )}
+                        <div style={{ height: 500, overflow: "auto" }}>
+                          <Table
+                            dataSource={getFailedSublist("zod").map(
+                              (d: any, i: number) => ({ ...d, key: i })
+                            )}
+                            size="small"
+                            pagination={false}
+                            columns={[
+                              {
+                                title: "记录",
+                                dataIndex: ["data", "id"],
+                                width: 80,
+                                render: (id, row) => id || `Row ${row.key}`,
+                              },
+                              {
+                                title: "格式错误",
+                                dataIndex: "reason",
+                                render: (r) => (
+                                  <Text type="danger" style={{ fontSize: 10 }}>
+                                    {r.replace("[数据校验] ", "")}
+                                  </Text>
+                                ),
+                              },
+                            ]}
+                          />
                         </div>
                       </Col>
                     </Row>
@@ -610,77 +610,54 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                 key: "debug",
                 label: (
                   <span>
-                    <BugOutlined /> Java 接口排查
+                    <BugOutlined /> 接口排查 (Debug)
                   </span>
                 ),
                 children: (
-                  <div>
-                    {selectedLog.writeFailureDetails ? (
-                      <Row gutter={16}>
-                        <Col span={12}>
-                          <Divider orientation="left">
-                            发送 Payload 报文
-                          </Divider>
-                          <div
-                            style={{
-                              background: "#1e1e1e",
-                              color: "#d4d4d4",
-                              padding: 12,
-                              borderRadius: 4,
-                              height: 500,
-                              overflow: "auto",
-                            }}
-                          >
-                            <pre style={{ fontSize: 12 }}>
-                              {JSON.stringify(
-                                selectedLog.writeFailureDetails.lastPayload,
-                                null,
-                                2
-                              )}
-                            </pre>
-                          </div>
-                        </Col>
-                        <Col span={12}>
-                          <Divider orientation="left">
-                            Java 返回 Response
-                          </Divider>
-                          <div
-                            style={{
-                              background: "#1e1e1e",
-                              color: "#ce9178",
-                              padding: 12,
-                              borderRadius: 4,
-                              height: 500,
-                              overflow: "auto",
-                            }}
-                          >
-                            <pre style={{ fontSize: 12 }}>
-                              {JSON.stringify(
-                                selectedLog.writeFailureDetails.lastResponse,
-                                null,
-                                2
-                              )}
-                            </pre>
-                          </div>
-                        </Col>
-                      </Row>
-                    ) : (
-                      <div style={{ padding: 40, textAlign: "center" }}>
-                        <CheckCircleOutlined
-                          style={{
-                            fontSize: 48,
-                            color: "#52c41a",
-                            marginBottom: 16,
-                          }}
-                        />
-                        <Title level={5}>此任务没有 Java 接口级报错</Title>
-                        <Text type="secondary">
-                          如果统计显示写入失败，通常是由于部分数据未通过 Java
-                          的业务校验，请查看概览页的失败详情。
-                        </Text>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Divider orientation="left">发送 Payload</Divider>
+                      <div
+                        style={{
+                          background: "#1e1e1e",
+                          color: "#d4d4d4",
+                          padding: 12,
+                          borderRadius: 4,
+                          height: 550,
+                          overflow: "auto",
+                        }}
+                      >
+                        <pre style={{ fontSize: 12 }}>
+                          {JSON.stringify(
+                            selectedLog.writeFailureDetails?.lastPayload,
+                            null,
+                            2
+                          )}
+                        </pre>
                       </div>
-                    )}
-                  </div>
+                    </Col>
+                    <Col span={12}>
+                      <Divider orientation="left">返回 Response</Divider>
+                      <div
+                        style={{
+                          background: "#1e1e1e",
+                          color: "#ce9178",
+                          padding: 12,
+                          borderRadius: 4,
+                          height: 550,
+                          overflow: "auto",
+                        }}
+                      >
+                        <pre style={{ fontSize: 12 }}>
+                          {JSON.stringify(
+                            selectedLog.writeFailureDetails?.lastResponse,
+                            null,
+                            2
+                          )}
+                        </pre>
+                      </div>
+                    </Col>
+                  </Row>
                 ),
               },
             ]}

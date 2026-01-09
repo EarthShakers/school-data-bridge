@@ -118,29 +118,15 @@ export async function runSyncTask(
           lastWriteFailure = javaResult.debugInfo;
         }
 
-        // 🚨 核心：如果 Java 写入有失败，需要将失败原因反向同步到 batchRecords 中，以便最终入库
+        // 🚨 核心：如果 Java 写入有失败，将原因同步到 batchRecords 中，但不再修改 transform 的统计计数
         if (javaResult.errors.length > 0) {
           javaResult.errors.forEach((javaErr) => {
-            // 在当前批次中找到对应的记录
             const record = batchRecords.find((r) => r.id === javaErr.id);
             if (record) {
               record._importStatus = "failed";
-              record._importError = javaErr.message;
+              record._importError = `[Java业务] ${javaErr.message}`;
             }
           });
-
-          // 重新统计本批次成功/失败（因为 Java 侧可能拒绝了部分原本转换成功的记录）
-          const finalBatchSuccess = batchRecords.filter(
-            (r) => r._importStatus === "success"
-          ).length;
-          const finalBatchFailed = batchRecords.filter(
-            (r) => r._importStatus === "failed"
-          ).length;
-
-          finalStages.transform.success =
-            finalStages.transform.success - successCount + finalBatchSuccess;
-          finalStages.transform.failed =
-            finalStages.transform.failed - failedCount + finalBatchFailed;
         }
 
         totalWritten += javaResult.success;
