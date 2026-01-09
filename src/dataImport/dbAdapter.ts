@@ -40,8 +40,7 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
   );
 
   // 🧪 Mock 逻辑判断：如果连接信息（字符串或分项参数）完全缺失，则使用 Mock
-  const hasConnection =
-    connectionString || (host && user && (database || sid));
+  const hasConnection = connectionString || (host && user && (database || sid));
   const isMock = !hasConnection;
 
   if (isMock) {
@@ -143,22 +142,32 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
     } else if (sql) {
       // 原生 SQL 模式
       const result = await db.raw(sql);
-      rawData = Array.isArray(result) ? result[0] : result.rows || result;
-    } else {
-      throw new Error(
-        "[DbAdapter] At least one of viewName, modelName, or sql must be provided"
+
+      // 兼容不同驱动的返回格式
+      if (Array.isArray(result)) {
+        // 如果第一项本身就是数组，说明是 [rows, fields] 格式 (常见于 MySQL)
+        if (Array.isArray(result[0])) {
+          rawData = result[0];
+        } else {
+          // 否则，result 本身可能就是行数组
+          rawData = result;
+        }
+      } else {
+        // 兼容 PostgreSQL/Oracle 的 .rows 包装
+        rawData = result.rows || result.results || result;
+      }
+
+      console.log(
+        `[DbAdapter] ✅ Successfully fetched ${
+          Array.isArray(rawData) ? rawData.length : 1
+        } records from DB using raw SQL.`
       );
+      return {
+        traceId,
+        tenantId,
+        rawData,
+      };
     }
-
-    console.log(
-      `[DbAdapter] ✅ Successfully fetched ${rawData.length} records from DB.`
-    );
-
-    return {
-      traceId,
-      tenantId,
-      rawData,
-    };
   } catch (error: any) {
     console.error(
       `[DbAdapter] Failed to fetch from DB for ${tenantId}:`,
