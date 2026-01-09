@@ -14,9 +14,11 @@ import {
   Divider,
   Empty,
   Typography,
-  message,
   Steps,
   Select,
+  Form,
+  Input,
+  message,
 } from "antd";
 import {
   SettingOutlined,
@@ -25,15 +27,20 @@ import {
   HistoryOutlined,
   FileTextOutlined,
   CloudServerOutlined,
-  DesktopOutlined,
+  EyeOutlined,
+  LinkOutlined,
+  DatabaseOutlined,
+  ArrowRightOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons";
 import dynamic from "next/dynamic";
-import Link from "next/link"; // 引入 Link
 import { loader } from "@monaco-editor/react";
 import dayjs from "dayjs";
 import JSON5 from "json5";
+import { EnvironmentConfig } from "@/src/saveData/config";
+import { useRouter } from "next/navigation";
 
-// 配置 Monaco 使用本地资源，彻底解决跨域和安全上下文拦截问题
+// 配置 Monaco 使用本地资源
 if (typeof window !== "undefined") {
   loader.config({
     paths: {
@@ -42,7 +49,6 @@ if (typeof window !== "undefined") {
   });
 }
 
-// 2. 动态导入 Editor 组件，并禁用 SSR
 const Editor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
   loading: () => (
@@ -61,19 +67,7 @@ const Editor = dynamic(() => import("@monaco-editor/react"), {
   ),
 });
 
-// 处理 Monaco Worker 路径
-if (typeof window !== "undefined") {
-  (window as any).MonacoEnvironment = {
-    getWorkerUrl: function (_moduleId: any, label: string) {
-      if (label === "json") {
-        return "/monaco-vs/language/json/jsonWorker.js";
-      }
-      return "/monaco-vs/base/worker/workerMain.js";
-    },
-  };
-}
-
-const { Text, Paragraph } = Typography;
+const { Text, Paragraph, Title } = Typography;
 const { Option } = Select;
 
 interface EntityConsoleProps {
@@ -85,6 +79,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   tenantId,
   entityType,
 }) => {
+  const router = useRouter();
   const [config, setConfig] = useState("");
   const [logs, setLogs] = useState<any[]>([]);
   const [loadingConfig, setLoadingConfig] = useState(false);
@@ -92,21 +87,20 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [targetEnv, setTargetEnv] = useState<string | undefined>(undefined);
-  const [envs, setEnvs] = useState<any[]>([]);
+  const [envs, setEnvs] = useState<EnvironmentConfig[]>([]);
 
-  const fetchEnvs = async () => {
+  const fetchEnvironments = async () => {
     try {
       const res = await fetch("/api/system-config");
       const data = await res.json();
-      if (data.environments && data.environments.length > 0) {
+      if (data.environments) {
         setEnvs(data.environments);
-        // 如果还没有选环境，默认选中第一个
-        if (!targetEnv) {
+        if (!targetEnv && data.environments.length > 0) {
           setTargetEnv(data.environments[0].id);
         }
       }
-    } catch (e) {
-      console.error("Failed to fetch envs", e);
+    } catch (err) {
+      message.error("获取环境列表失败");
     }
   };
 
@@ -127,6 +121,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
 
   const saveConfig = async () => {
     try {
+      JSON5.parse(config);
       const res = await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -134,8 +129,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       });
       if (res.ok) message.success("配置已保存");
       else message.error("保存失败");
-    } catch (err) {
-      message.error("保存失败");
+    } catch (err: any) {
+      message.error("保存失败: " + err.message);
     }
   };
 
@@ -196,12 +191,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   useEffect(() => {
     fetchConfig();
     fetchLogs();
-    fetchEnvs();
-
-    const timer = setInterval(() => {
-      fetchLogs();
-    }, 10000);
-
+    fetchEnvironments();
+    const timer = setInterval(fetchLogs, 10000);
     return () => clearInterval(timer);
   }, [tenantId, entityType]);
 
@@ -216,20 +207,15 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       key: "status",
       render: (record: any) => {
         const fetchStatus = record.stages?.fetch?.status;
-        const isRunning = fetchStatus === "running";
-        const isQueued = fetchStatus === "queued";
-
-        if (isRunning) {
+        if (fetchStatus === "queued")
+          return <Badge status="default" text="排队中..." />;
+        if (fetchStatus === "running")
           return <Badge status="processing" text="执行中..." />;
-        }
-        if (isQueued) {
-          return <Badge status="warning" text="排队中..." />;
-        }
+
         const hasError =
           record.summary?.failed > 0 ||
           fetchStatus === "failed" ||
           record.stages?.write?.failed > 0;
-
         const errorReason = record.stages?.fetch?.reason;
 
         return hasError ? (
@@ -238,7 +224,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
             {errorReason && (
               <Text
                 type="danger"
-                style={{ fontSize: 11, maxWidth: 100 }}
+                style={{ fontSize: 11, maxWidth: 120 }}
                 ellipsis={{ tooltip: errorReason }}
               >
                 ({errorReason})
@@ -251,21 +237,21 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       },
     },
     {
-      title: "统计",
-      dataIndex: "summary",
-      render: (s: any) => (
-        <Space>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            总数: {s.total}
-          </Text>
-          <Text type="success" style={{ fontSize: 12 }}>
-            成功: {s.success}
-          </Text>
-          <Text type="danger" style={{ fontSize: 12 }}>
-            失败: {s.failed}
-          </Text>
-        </Space>
-      ),
+      title: "统计 (成功/总数)",
+      key: "stat",
+      render: (record: any) => {
+        const success = record.stages?.write?.success ?? 0;
+        const total = record.summary?.total ?? 0;
+        return (
+          <Space>
+            <Text strong style={{ color: success > 0 ? "#52c41a" : "#999" }}>
+              {success}
+            </Text>
+            <Text type="secondary">/</Text>
+            <Text>{total}</Text>
+          </Space>
+        );
+      },
     },
     {
       title: "操作",
@@ -274,15 +260,23 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
           <Button
             size="small"
             type="link"
+            icon={<EyeOutlined />}
             onClick={() => viewLogDetail(record.id)}
           >
             详情
           </Button>
-          <Link href="/tasks">
-            <Button size="small" type="link" icon={<DesktopOutlined />}>
-              任务队列
-            </Button>
-          </Link>
+          <Button
+            size="small"
+            type="link"
+            icon={<LinkOutlined />}
+            onClick={() =>
+              router.push(
+                `/tasks?tenantId=${tenantId}&entityType=${entityType}&traceId=${record.traceId}`
+              )
+            }
+          >
+            任务队列
+          </Button>
         </Space>
       ),
     },
@@ -304,8 +298,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                   icon={<FileTextOutlined />}
                   onClick={() => {
                     try {
-                      const json = JSON5.parse(config);
-                      setConfig(JSON.stringify(json, null, 2));
+                      setConfig(JSON.stringify(JSON5.parse(config), null, 2));
                     } catch (e: any) {
                       message.warning("无法格式化：" + e.message);
                     }
@@ -345,6 +338,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                   tabSize: 2,
                   formatOnPaste: true,
                 }}
+                // @ts-ignore
+                path="/monaco-vs"
               />
             </div>
           </Card>
@@ -368,17 +363,13 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                 value={targetEnv}
                 onChange={setTargetEnv}
               >
-                {envs.length > 0 &&
-                  envs.map((env) => (
-                    <Option key={env.id} value={env.id}>
-                      {env.name}
-                    </Option>
-                  ))}
+                {envs.map((env) => (
+                  <Option key={env.id} value={env.id}>
+                    {env.name}
+                  </Option>
+                ))}
               </Select>
             </div>
-            <Paragraph>
-              <Text type="secondary">配置修改后请先点击保存，再执行同步。</Text>
-            </Paragraph>
             <Button
               type="primary"
               danger
@@ -430,21 +421,25 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       </Row>
 
       <Modal
-        title="同步执行全流程详情"
+        title={
+          <Title level={4} style={{ margin: 0 }}>
+            同步全流程详情 [TraceID: {selectedLog?.traceId}]
+          </Title>
+        }
         open={logModalVisible}
         onCancel={() => setLogModalVisible(false)}
         footer={null}
-        width={1000}
+        width={1100}
       >
         {selectedLog && (
           <div>
-            <div style={{ padding: "20px 0 40px" }}>
+            <div style={{ padding: "20px 0 30px" }}>
               <Steps
                 current={3}
                 items={[
                   {
-                    title: "数据抓取",
-                    description: `抓取总数: ${
+                    title: "1. 抓取元数据",
+                    description: `获取原始记录: ${
                       selectedLog.stages?.fetch?.total || 0
                     }`,
                     status:
@@ -453,36 +448,20 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                         : "error",
                   },
                   {
-                    title: "数据转换与校验",
-                    description: (
-                      <div>
-                        <Text type="success">
-                          成功: {selectedLog.stages?.transform?.success || 0}
-                        </Text>
-                        <br />
-                        <Text type="danger">
-                          失败: {selectedLog.stages?.transform?.failed || 0}
-                        </Text>
-                      </div>
-                    ),
+                    title: "2. 数据转换校验",
+                    description: `合法: ${
+                      selectedLog.stages?.transform?.success || 0
+                    } / 非法: ${selectedLog.stages?.transform?.failed || 0}`,
                     status:
                       (selectedLog.stages?.transform?.failed || 0) > 0
                         ? "error"
                         : "finish",
                   },
                   {
-                    title: "写入 Java 服务",
-                    description: (
-                      <div>
-                        <Text type="success">
-                          写入: {selectedLog.stages?.write?.success || 0}
-                        </Text>
-                        <br />
-                        <Text type="danger">
-                          失败: {selectedLog.stages?.write?.failed || 0}
-                        </Text>
-                      </div>
-                    ),
+                    title: "3. 写入 Java 服务",
+                    description: `成功: ${
+                      selectedLog.stages?.write?.success || 0
+                    } / 失败: ${selectedLog.stages?.write?.failed || 0}`,
                     status:
                       (selectedLog.stages?.write?.failed || 0) > 0
                         ? "error"
@@ -492,60 +471,111 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
               />
             </div>
 
-            <Descriptions title="汇总统计" bordered size="small" column={3}>
-              <Descriptions.Item label="原始总数">
-                {selectedLog.summary.total}
-              </Descriptions.Item>
-              <Descriptions.Item label="通过校验">
-                {selectedLog.summary.success}
-              </Descriptions.Item>
-              <Descriptions.Item label="入库成功">
-                {selectedLog.stages?.write?.success || 0}
-              </Descriptions.Item>
-            </Descriptions>
+            <Row gutter={16}>
+              <Col span={8}>
+                <Divider orientation="left">
+                  <DatabaseOutlined /> 1. 抓取元数据样本
+                </Divider>
+                <div
+                  style={{
+                    background: "#f0f2f5",
+                    padding: 12,
+                    borderRadius: 4,
+                    height: 400,
+                    overflow: "auto",
+                  }}
+                >
+                  {selectedLog.rawDataSample &&
+                  selectedLog.rawDataSample.length > 0 ? (
+                    <pre style={{ fontSize: 11 }}>
+                      {JSON.stringify(selectedLog.rawDataSample, null, 2)}
+                    </pre>
+                  ) : (
+                    <Empty description="未采集到元数据" />
+                  )}
+                </div>
+              </Col>
+              <Col span={1}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    height: "100%",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ArrowRightOutlined
+                    style={{ color: "#bfbfbf", fontSize: 20 }}
+                  />
+                </div>
+              </Col>
+              <Col span={7}>
+                <Divider orientation="left">
+                  <CheckCircleOutlined /> 2. 转换后全量数据 (待写入)
+                </Divider>
+                <div
+                  style={{
+                    background: "#f6ffed",
+                    padding: 12,
+                    borderRadius: 4,
+                    height: 400,
+                    overflow: "auto",
+                    border: "1px solid #b7eb8f",
+                  }}
+                >
+                  {selectedLog.successData &&
+                  selectedLog.successData.length > 0 ? (
+                    <pre style={{ fontSize: 11 }}>
+                      {JSON.stringify(
+                        selectedLog.successData, // 移除了 .slice(0, 3)
+                        null,
+                        2
+                      )}
+                    </pre>
+                  ) : (
+                    <Empty description="无转换成功数据" />
+                  )}
+                </div>
+              </Col>
+              <Col span={8}>
+                <Divider orientation="left">
+                  <Text type="danger">3. 失败记录原因</Text>
+                </Divider>
+                <div style={{ height: 400, overflow: "auto" }}>
+                  {selectedLog.failedData &&
+                  selectedLog.failedData.length > 0 ? (
+                    <Table
+                      dataSource={selectedLog.failedData
+                        .slice(0, 20)
+                        .map((d: any, i: number) => ({ ...d, key: i }))}
+                      size="small"
+                      pagination={false}
+                      columns={[
+                        { title: "ID", dataIndex: ["data", "id"], width: 80 },
+                        {
+                          title: "错误原因",
+                          dataIndex: "reason",
+                          render: (r) => (
+                            <Text type="danger" style={{ fontSize: 11 }}>
+                              {typeof r === "string" ? r : JSON.stringify(r)}
+                            </Text>
+                          ),
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <Empty description="没有失败记录" />
+                  )}
+                </div>
+              </Col>
+            </Row>
 
-            <Divider orientation="left">失败记录 (前 50 条)</Divider>
-            {selectedLog.failedData.length > 0 ? (
-              <Table
-                dataSource={selectedLog.failedData
-                  .slice(0, 50)
-                  .map((d: any, i: number) => ({ ...d, key: i }))}
-                size="small"
-                columns={[
-                  {
-                    title: "原始数据",
-                    dataIndex: "data",
-                    render: (d) => (
-                      <pre style={{ fontSize: 10 }}>
-                        {JSON.stringify(d, null, 2)}
-                      </pre>
-                    ),
-                  },
-                  {
-                    title: "原因",
-                    dataIndex: "reason",
-                    render: (r) => (
-                      <Text type="danger">{JSON.stringify(r)}</Text>
-                    ),
-                  },
-                ]}
-                pagination={false}
-              />
-            ) : (
-              <Empty description="没有失败记录" />
-            )}
-
-            <Divider orientation="left">成功数据样本 (前 5 条)</Divider>
-            <pre
-              style={{
-                background: "#f5f5f5",
-                padding: 12,
-                borderRadius: 4,
-                fontSize: 12,
-              }}
-            >
-              {JSON.stringify(selectedLog.successData.slice(0, 5), null, 2)}
-            </pre>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <Text type="secondary">
+                同步开始时间:{" "}
+                {dayjs(selectedLog.time).format("YYYY-MM-DD HH:mm:ss")}
+              </Text>
+            </div>
           </div>
         )}
       </Modal>

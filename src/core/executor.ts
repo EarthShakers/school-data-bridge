@@ -27,6 +27,7 @@ export async function runSyncTask(
   let totalWritten = 0;
   let totalFailed = 0;
   let allCollectedRecords: any[] = [];
+  let rawDataSample: any[] = []; // 新增：采样原始数据
   let finalStages = {
     fetch: { total: 0, status: "success" },
     transform: { success: 0, failed: 0 },
@@ -71,6 +72,11 @@ export async function runSyncTask(
       if (currentBatchSize === 0) {
         console.log(`[Executor] 🏁 No more data found.`);
         break;
+      }
+
+      // 采集原始数据样本 (捕获第一批次的所有数据，以便全量比对)
+      if (rawDataSample.length === 0) {
+        rawDataSample = Array.isArray(rawData) ? [...rawData] : [rawData];
       }
 
       // 3. 转换与校验
@@ -176,7 +182,8 @@ export async function runSyncTask(
       entityType,
       taskTraceId,
       allCollectedRecords,
-      finalStages
+      finalStages,
+      rawDataSample // 传入样本
     );
 
     console.log(
@@ -208,7 +215,8 @@ export async function runSyncTask(
         },
         transform: finalStages.transform,
         write: finalStages.write,
-      }
+      },
+      rawDataSample // 传入样本
     );
     throw error;
   }

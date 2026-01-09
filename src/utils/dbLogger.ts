@@ -10,10 +10,11 @@ export async function saveImportResultToDb(
   traceId: string,
   allRecords: any[],
   stageStats?: {
-    fetch: { total: number; status: string; reason?: string }; // 新增 reason
+    fetch: { total: number; status: string; reason?: string };
     transform: { success: number; failed: number };
     write: { success: number; failed: number };
-  }
+  },
+  rawDataSample?: any[] // 新增：原始数据样本
 ) {
   const successData = allRecords.filter((r) => r._importStatus === "success");
   const failedData = allRecords.filter((r) => r._importStatus === "failed");
@@ -30,17 +31,18 @@ export async function saveImportResultToDb(
     write: { success: 0, failed: 0 },
   };
 
+  // 移除内部标识字段
   const successDataClean = successData.map(
-    ({ _importStatus, _importError, ...rest }) => rest
+    ({ _importStatus, _importError, _metadata, ...rest }) => rest
   );
 
-  const failedDataWithReason = failedData.map(({ _importStatus, _importError, ...rest }) => ({
+  const failedDataWithReason = failedData.map(({ _importStatus, _importError, _metadata, ...rest }) => ({
     data: rest,
     reason: _importError,
   }));
 
   try {
-    const data = {
+    const dataToSave: any = {
       tenant_id: tenantId,
       entity_type: entityType,
       trace_id: traceId,
@@ -48,32 +50,25 @@ export async function saveImportResultToDb(
       stages: JSON.stringify(stages),
       success_data: JSON.stringify(successDataClean),
       failed_data: JSON.stringify(failedDataWithReason),
+      created_at: metadataDb.fn.now(),
     };
 
-    /**
-     * 重要：不要依赖 trace_id 的唯一索引来做 upsert（不同环境可能没有建 unique）。
-     * 策略：先 update；如果没有命中行，再 insert。
-     */
-    const updated = await metadataDb("bridge_sync_logs")
-      .where({ trace_id: traceId })
-      .update({
-        tenant_id: tenantId,
-        entity_type: entityType,
-        summary: data.summary,
-        stages: data.stages,
-        success_data: data.success_data,
-        failed_data: data.failed_data,
-      });
-
-    if (!updated) {
-      await metadataDb("bridge_sync_logs").insert(data);
+    if (rawDataSample) {
+      dataToSave.raw_data_sample = JSON.stringify(rawDataSample);
     }
 
-    console.log(
-      `[Storage] 🗄 Import result synced to DB for ${tenantId}:${entityType} (TraceId: ${traceId}, updated=${updated ? "yes" : "no"})`
-    );
+    // 尝试更新现有记录
+    const updatedRows = await metadataDb("bridge_sync_logs")
+      .where({ trace_id: traceId })
+      .update(dataToSave);
+
+    if (updatedRows === 0) {
+      await metadataDb("bridge_sync_logs").insert(dataToSave);
+      console.log(`[Storage] 🗄 Inserted new sync log for ${tenantId}:${entityType} (TraceId: ${traceId})`);
+    } else {
+      console.log(`[Storage] 🗄 Updated sync log for ${tenantId}:${entityType} (TraceId: ${traceId})`);
+    }
   } catch (error: any) {
     console.error(`[Storage] ❌ Failed to save import result to DB:`, error.message);
   }
 }
-

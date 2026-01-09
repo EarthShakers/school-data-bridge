@@ -44,12 +44,16 @@ export async function GET(request: Request) {
           typeof log.success_data === "string"
             ? JSON.parse(log.success_data)
             : log.success_data,
-        failedData:
-          typeof log.failed_data === "string"
-            ? JSON.parse(log.failed_data)
-            : log.failed_data,
-        time: log.created_at,
-      });
+                failedData:
+                  typeof log.failed_data === "string"
+                    ? JSON.parse(log.failed_data)
+                    : log.failed_data,
+                rawDataSample:
+                  typeof log.raw_data_sample === "string"
+                    ? JSON.parse(log.raw_data_sample)
+                    : log.raw_data_sample,
+                time: log.created_at,
+              });
     }
 
     // 2. 否则返回列表 (只返回摘要信息，不返回大数据量详情)
