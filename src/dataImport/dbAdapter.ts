@@ -39,20 +39,14 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
     }. Mode: ${viewName ? "View" : sql ? "SQL" : "Model"}`
   );
 
-  // 🧪 Mock 逻辑判断：如果连接信息（字符串或分项参数）完全缺失，则使用 Mock
+  // 🧪 Mock 逻辑判定：现在只在连接信息完全缺失且明确想要 Mock 时才使用
   const hasConnection = connectionString || (host && user && (database || sid));
-  const isMock = !hasConnection;
 
-  if (isMock) {
-    console.log(
-      `[DbAdapter] 🧪 Using mock data. Reason: No connection parameters provided.`
+  if (!hasConnection) {
+    // 如果没有任何连接信息，直接报错，不再静默回退到 Mock
+    throw new Error(
+      `[DbAdapter] ❌ 无法连接数据库: 租户 ${tenantId} 的 ${entityType} 配置缺失连接参数 (ConnectionString 或 Host/User/Pass)。请检查 UI 中的“共享资源配置”是否保存。`
     );
-    return {
-      traceId,
-      tenantId,
-      rawData:
-        config.entityType === "student" ? studentMockData : teacherMockData,
-    };
   }
 
   console.log(

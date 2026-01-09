@@ -24,7 +24,14 @@ export async function getSchoolConfig(
     .where({ tenant_id: tenantId })
     .first();
 
-  const commonConfig = tenantRow?.common_config || {};
+  let commonConfig: any = {};
+  if (tenantRow?.common_config) {
+    // 强制解析，防止不同环境下 Knex 返回的是字符串而不是对象
+    commonConfig =
+      typeof tenantRow.common_config === "string"
+        ? JSON.parse(tenantRow.common_config)
+        : tenantRow.common_config;
+  }
 
   // 3. 合并配置
   const mergedConfig: SchoolConfig = {
