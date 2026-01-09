@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import knex, { Knex } from "knex";
 import { SchoolConfig, DataEnvelope } from "../types";
-import { studentMockData, teacherMockData } from "../../mock";
 
 /**
  * DB 适配器：从数据库抓取数据

@@ -58,6 +58,7 @@ export async function getSchoolConfig(
     dbConfig.user = dbConfig.user || commonConfig.dbUser;
     dbConfig.password = dbConfig.password || commonConfig.dbPass;
     dbConfig.database = dbConfig.database || commonConfig.dbName;
+    dbConfig.sid = dbConfig.sid || commonConfig.dbSid; // Oracle SID
   } else if (mergedConfig.dataSource.type === "api") {
     const apiConfig = mergedConfig.dataSource.config;
     if (commonConfig.apiBaseUrl && apiConfig.url?.startsWith("/")) {
