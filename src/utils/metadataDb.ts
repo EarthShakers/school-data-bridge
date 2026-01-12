@@ -11,8 +11,8 @@ if (!globalForKnex.metadataDb) {
       process.env.METADATA_DB_URL ||
       "mysql://root:hyt123456@120.46.13.170:3306/school_data_bridge",
     pool: {
-      min: 2, // 保持最少 2 个连接，提高响应速度
-      max: 20, // 👈 适当增加，防止任务并发时耗尽
+      min: 2,
+      max: 50, // 👈 进一步增加，确保并发日志写入不堵塞
       acquireTimeoutMillis: 60000,
       idleTimeoutMillis: 30000,
       reapIntervalMillis: 1000,

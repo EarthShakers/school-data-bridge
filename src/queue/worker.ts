@@ -18,7 +18,8 @@ export const syncWorker = new Worker(
   },
   {
     connection: redisConnection,
-    concurrency: 2, // 同时处理的任务数，可根据服务器性能调整
+    concurrency: 2, // 同时处理的任务数
+    lockDuration: 60000, // 👈 增加到 60 秒，防止处理慢查询时锁过期导致重复执行
   }
 );
 

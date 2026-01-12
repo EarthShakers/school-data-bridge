@@ -40,7 +40,16 @@ export async function runSyncTask(
   let hasMore = true;
 
   try {
+    const startTime = Date.now();
     const config = await getSchoolConfig(tenantId, entityType);
+    console.log(`[Executor] ⏱ Config loaded in ${Date.now() - startTime}ms`);
+
+    // 预先获取写入端点，避免在循环中重复查询数据库
+    const javaEndpoint = await getEndpointForEntity(
+      config.entityType,
+      environment
+    );
+    console.log(`[Executor] 🚀 Target Endpoint: ${javaEndpoint}`);
 
     // --- 修改：使用外部传入或新生成的 traceId ---
     await saveImportResultToDb(tenantId, entityType, taskTraceId, [], {
@@ -50,8 +59,10 @@ export async function runSyncTask(
     });
 
     while (hasMore) {
+      const batchStartTime = Date.now();
       // 1. 准备配置
       const currentConfig = { ...config };
+      // ... (省略中间逻辑保持不变)
       if (
         currentConfig.dataSource.type === "api" &&
         currentConfig.dataSource.config.pagination
@@ -62,7 +73,12 @@ export async function runSyncTask(
       }
 
       // 2. 抓取数据
+      const fetchStart = Date.now();
       const envelope = await fetchData(currentConfig);
+      console.log(
+        `[Executor] 📥 Fetch batch took ${Date.now() - fetchStart}ms`
+      );
+
       const rawData = envelope.rawData;
       const currentBatchSize = Array.isArray(rawData)
         ? rawData.length
@@ -75,7 +91,7 @@ export async function runSyncTask(
         break;
       }
 
-      // 采集原始数据样本 (限制采集前 500 条，防止数据库超限，同时也覆盖了大多数场景)
+      // 采集原始数据样本 (限制采集前 500 条)
       if (rawDataSample.length < 500) {
         const sample = Array.isArray(rawData) ? rawData : [rawData];
         rawDataSample.push(...sample);
@@ -85,11 +101,15 @@ export async function runSyncTask(
       }
 
       // 3. 转换与校验
+      const transformStart = Date.now();
       const {
         allRecords: batchRecords,
         successCount,
         failedCount,
       } = await transformAndValidate(envelope, currentConfig);
+      console.log(
+        `[Executor] ⚙️ Transform batch took ${Date.now() - transformStart}ms`
+      );
 
       allCollectedRecords.push(...batchRecords);
       finalStages.fetch.total += currentBatchSize;
@@ -102,17 +122,18 @@ export async function runSyncTask(
         .map(({ _importStatus, _importError, _metadata, ...rest }) => rest);
 
       if (dataToWrite.length > 0) {
+        const writeStart = Date.now();
         const javaResult = await writeToInternalJavaService(dataToWrite, {
           batchSize:
             config.batchConfig.batchSize || baseConfig.DEFAULT_BATCH_SIZE,
           concurrency: Math.max(1, baseConfig.MAX_GLOBAL_CONCURRENCY / 2),
-          javaEndpoint: await getEndpointForEntity(
-            config.entityType,
-            environment
-          ),
+          javaEndpoint, // 使用预获取的端点
           authToken: config.javaAuthToken,
           entityType: config.entityType,
         });
+        console.log(
+          `[Executor] 📤 Write batch took ${Date.now() - writeStart}ms`
+        );
 
         if (javaResult.debugInfo) {
           lastWriteFailure = javaResult.debugInfo;
