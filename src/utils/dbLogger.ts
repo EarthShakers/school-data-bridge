@@ -63,8 +63,9 @@ export async function saveImportResultToDb(
       trace_id: traceId,
       summary: JSON.stringify(summary),
       stages: JSON.stringify(stages),
-      success_data: JSON.stringify(successDataClean),
-      failed_data: JSON.stringify(failedDataWithReason),
+      // 🔧 性能优化：如果数据量巨大，为了防止连接池超时，日志中仅保留前 1000 条
+      success_data: JSON.stringify(successDataClean.slice(0, 1000)),
+      failed_data: JSON.stringify(failedDataWithReason.slice(0, 1000)),
       created_at: metadataDb.fn.now(),
     };
 

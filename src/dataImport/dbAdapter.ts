@@ -3,12 +3,112 @@ import knex, { Knex } from "knex";
 import { SchoolConfig, DataEnvelope } from "../types";
 
 /**
+ * 数据库连接池管理器 (静态缓存)
+ * 🔧 Next.js 单例模式：防止 HMR 导致连接池泄漏
+ */
+const globalForDbManager = global as unknown as {
+  dbConnections: Map<string, Knex>;
+};
+
+if (!globalForDbManager.dbConnections) {
+  globalForDbManager.dbConnections = new Map();
+}
+
+class DbConnectionManager {
+  private static get connections() {
+    return globalForDbManager.dbConnections;
+  }
+
+  /**
+   * 获取或创建一个连接池
+   */
+  static async getConnection(config: SchoolConfig): Promise<Knex> {
+    const { dataSource, tenantId } = config;
+    if (dataSource.type !== "db") throw new Error("Invalid dataSource type");
+
+    const {
+      dbType,
+      connectionString,
+      host,
+      port,
+      user,
+      password,
+      database,
+      sid,
+    } = dataSource.config;
+
+    // 构造缓存 Key：租户ID + 核心连接参数
+    const cacheKey = `${tenantId}:${dbType}:${
+      connectionString || host
+    }:${port}:${user}:${database || sid}`;
+
+    if (this.connections.has(cacheKey)) {
+      // console.log(`[DbManager] ♻️ Reusing connection for ${tenantId}`);
+      return this.connections.get(cacheKey)!;
+    }
+
+    console.log(
+      `[DbManager] 🆕 Creating new connection pool for ${tenantId} (${dbType})`
+    );
+
+    // 映射 DB 类型到 knex 客户端
+    const clientMap: Record<string, string> = {
+      mysql: "mysql2",
+      postgresql: "pg",
+      oracle: "oracledb",
+      sqlserver: "tedious",
+    };
+    const client = clientMap[dbType] || dbType;
+
+    // 构造 Knex 连接配置
+    let knexConnection: any;
+    if (connectionString) {
+      knexConnection = connectionString;
+    } else {
+      knexConnection = {
+        host,
+        port: Number(port),
+        user,
+        password,
+        database,
+      };
+      if (dbType === "postgresql") {
+        knexConnection.ssl = { rejectUnauthorized: false };
+      }
+      if (dbType === "oracle" && sid) {
+        knexConnection.connectString = `${host}:${port}:${sid}`;
+      }
+    }
+
+    const db = knex({
+      client,
+      connection: knexConnection,
+      pool: {
+        min: 0,
+        max: 5, // 👈 为每个学校保留少量长连接
+        acquireTimeoutMillis: 60000,
+        idleTimeoutMillis: 300000, // 👈 闲置 5 分钟后才真正关闭
+      },
+      acquireConnectionTimeout: 60000,
+    });
+
+    this.connections.set(cacheKey, db);
+    return db;
+  }
+
+  /**
+   * 销毁所有连接（通常在进程退出时调用）
+   */
+  static async destroyAll() {
+    for (const [key, db] of this.connections.entries()) {
+      await db.destroy();
+    }
+    this.connections.clear();
+  }
+}
+
+/**
  * DB 适配器：从数据库抓取数据
- *
- * 在配置中可以通过 dataSource.config 定义查询方式：
- * - viewName: 视图名称（推荐，逻辑在 DB 端闭环）
- * - sql: 直接执行的 SQL 语句
- * - modelName: 模型名称（对应表名）
  */
 export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
   if (config.dataSource.type !== "db") {
@@ -16,130 +116,41 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
   }
 
   const { dataSource, tenantId, entityType } = config;
-  const {
-    dbType,
-    viewName,
-    sql,
-    modelName,
-    connectionString,
-    host,
-    port,
-    user,
-    password,
-    database,
-    sid,
-  } = dataSource.config;
-
+  const { viewName, sql, modelName } = dataSource.config;
   const traceId = uuidv4();
 
-  // 严格校验连接信息，不通过则直接报错，防止进入 Mock 逻辑
-  const hasConnection = connectionString || (host && user && (database || sid));
-
-  if (!hasConnection) {
-    throw new Error(
-      `[DbAdapter] ❌ 无法连接数据库：缺失连接参数。请检查租户【共享资源配置】。`
-    );
-  }
-
-  console.log(
-    `[DbAdapter] 🔌 Attempting real DB connection to ${dbType} for ${tenantId}`
-  );
-
-  // 映射 DB 类型到 knex 客户端
-  const clientMap: Record<string, string> = {
-    mysql: "mysql2",
-    postgresql: "pg",
-    oracle: "oracledb",
-    sqlserver: "tedious",
-  };
-
-  const client = clientMap[dbType] || dbType;
-
-  // 构造 Knex 连接配置
-  let knexConnection: any;
-  if (connectionString) {
-    knexConnection = connectionString;
-  } else {
-    knexConnection = {
-      host,
-      port: Number(port),
-      user,
-      password,
-      database,
-    };
-
-    // PostgreSQL SSL 支持
-    if (dbType === "postgresql") {
-      knexConnection.ssl = { rejectUnauthorized: false };
-    }
-
-    // Oracle SID 支持
-    if (dbType === "oracle" && sid) {
-      knexConnection.connectString = `${host}:${port}:${sid}`;
-    }
-  }
-
-  // 创建临时连接池
-  const db = knex({
-    client,
-    connection: knexConnection,
-    pool: { min: 0, max: 1 },
-  });
+  // 1. 获取（或复用）连接池
+  const db = await DbConnectionManager.getConnection(config);
 
   try {
     let rawData: any[];
 
-    // 从 fieldMap 中提取所有 sourceField，显式查询核心字段
     const selectFields = config.fieldMap
       .map((fm) => fm.sourceField)
       .filter((f) => !!f);
 
     const queryFields = selectFields.length > 0 ? selectFields : ["*"];
-
-    if (selectFields.length > 0) {
-      console.log(
-        `[DbAdapter] 🔍 Explicitly selecting fields: ${selectFields.join(", ")}`
-      );
-    } else {
-      console.warn(
-        "[DbAdapter] ⚠️ No field mapping found, falling back to select('*')"
-      );
-    }
-
     const batchSize = dataSource.config.batchSize || 1000;
     const offset = dataSource.config.offset || 0;
 
     if (viewName) {
-      const query = db
+      rawData = await db
         .select(queryFields)
         .from(viewName)
         .limit(batchSize)
         .offset(offset);
-      console.log(`[DbAdapter] 🔍 Executing Query: ${query.toString()}`);
-      rawData = await query;
     } else if (modelName) {
-      const query = db
+      rawData = await db
         .select(queryFields)
         .from(modelName)
         .limit(batchSize)
         .offset(offset);
-      console.log(`[DbAdapter] 🔍 Executing Query: ${query.toString()}`);
-      rawData = await query;
     } else if (sql) {
-      // 原生 SQL 模式
       const result = await db.raw(sql);
-
       // 兼容不同驱动的返回格式
       if (Array.isArray(result)) {
-        // 如果第一项本身就是数组，说明是 [rows, fields] 格式 (常见于 MySQL)
-        if (Array.isArray(result[0])) {
-          rawData = result[0];
-        } else {
-          // 否则，result 本身可能就是行数组
-          rawData = result;
-        }
+        rawData = Array.isArray(result[0]) ? result[0] : result;
       } else {
-        // 兼容 PostgreSQL/Oracle 的 .rows 包装
         rawData =
           result.rows ||
           result.results ||
@@ -147,29 +158,23 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
       }
     } else {
       throw new Error(
-        "[DbAdapter] At least one of viewName, modelName, or sql must be provided"
+        "[DbAdapter] Missing query configuration (viewName/sql/modelName)"
       );
     }
 
     console.log(
-      `[DbAdapter] ✅ Successfully fetched ${
+      `[DbAdapter] ✅ Fetched ${
         Array.isArray(rawData) ? rawData.length : 0
-      } records from DB.`
+      } records for ${tenantId}:${entityType}`
     );
 
-    return {
-      traceId,
-      tenantId,
-      rawData,
-    };
+    return { traceId, tenantId, rawData };
   } catch (error: any) {
     console.error(
-      `[DbAdapter] Failed to fetch from DB for ${tenantId}:`,
+      `[DbAdapter] ❌ Error fetching from ${tenantId}:`,
       error.message
     );
     throw error;
-  } finally {
-    // 必须关闭连接，否则进程不会退出
-    await db.destroy();
   }
+  // ⚠️ 注意：这里不再调用 db.destroy()，由管理器统一维护
 }

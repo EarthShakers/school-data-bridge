@@ -209,7 +209,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
     fetchConfig();
     fetchLogs();
     fetchEnvironments();
-    const timer = setInterval(fetchLogs, 10000);
+    const timer = setInterval(fetchLogs, 60000);
     return () => clearInterval(timer);
   }, [tenantId, entityType]);
 
@@ -533,7 +533,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                             overflow: "auto",
                           }}
                         >
-                          {selectedLog.rawDataSample ? (
+                          {selectedLog.rawDataSample &&
+                          selectedLog.rawDataSample.length > 0 ? (
                             <pre style={{ fontSize: 10 }}>
                               {JSON.stringify(
                                 selectedLog.rawDataSample,
