@@ -185,11 +185,13 @@ export const TaskList: React.FC<TaskListProps> = ({
     },
     {
       title: "失败原因",
-      dataIndex: "failedReason",
       key: "failedReason",
       width: 320,
-      render: (r: string) =>
-        r ? (
+      render: (record: any) => {
+        const r = record.failedReason;
+        const isFailed = record.status === "failed";
+        if (!r || !isFailed) return "-";
+        return (
           <div style={{ paddingRight: 10 }}>
             <Space size={4}>
               <Text
@@ -210,9 +212,8 @@ export const TaskList: React.FC<TaskListProps> = ({
               </Button>
             </Space>
           </div>
-        ) : (
-          "-"
-        ),
+        );
+      },
     },
   ];
 

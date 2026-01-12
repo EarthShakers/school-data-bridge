@@ -59,6 +59,10 @@ export async function transformAndValidate(
   // 3. Zod 验证
   const allRecords: any[] = [];
 
+  if (transformedData.length > 0) {
+    console.log(`[Pipeline] Sample transformed item (before Zod):`, JSON.stringify(transformedData[0], null, 2));
+  }
+
   transformedData.forEach((item: any, index: number) => {
     const validation = schema.safeParse(item);
     if (validation.success) {

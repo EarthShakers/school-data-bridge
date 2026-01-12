@@ -195,26 +195,41 @@ export async function runSyncTask(
   } catch (error: any) {
     console.error(
       `[Executor] ❌ Fatal Error: ${tenantId}:${entityType} ->`,
-      error.message
+      error.stack || error.message
     );
-    // 即使失败，也要更新数据库状态为 failed，防止 UI 卡在 "排队中" 或 "进行中"
-    await saveImportResultToDb(
-      tenantId,
-      entityType,
-      taskTraceId,
-      allCollectedRecords,
-      {
-        fetch: {
-          total: finalStages.fetch.total,
-          status: "failed",
-          reason: error.message, // 记录具体的错误原因
+
+    // 尝试更新数据库状态为 failed
+    try {
+      await saveImportResultToDb(
+        tenantId,
+        entityType,
+        taskTraceId,
+        allCollectedRecords,
+        {
+          fetch: {
+            total: finalStages.fetch.total,
+            status: "failed",
+            reason: error.message,
+          },
+          transform: finalStages.transform,
+          write: finalStages.write,
         },
-        transform: finalStages.transform,
-        write: finalStages.write,
-      },
-      rawDataSample,
-      lastWriteFailure
-    );
+        rawDataSample,
+        lastWriteFailure
+      );
+    } catch (dbError: any) {
+      console.error(
+        `[Executor] 🚨 Critical: Failed to save error status to DB:`,
+        dbError.message
+      );
+      // 如果保存日志也失败了，我们把原始错误和 DB 错误组合一下抛出，
+      // 这样 BullMQ 的 failedReason 就能看到真相
+      const combinedError = new Error(
+        `[Original Error] ${error.message} | [DB Log Error] ${dbError.message}`
+      );
+      throw combinedError;
+    }
+
     throw error;
   }
 }
