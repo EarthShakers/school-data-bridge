@@ -72,6 +72,13 @@ export const TaskList: React.FC<TaskListProps> = ({
       ellipsis: true,
     },
     {
+      title: "traceId",
+      render: (record: any) => record.data?.traceId || "-",
+      key: "traceId",
+      width: 200,
+      ellipsis: true,
+    },
+    {
       title: "租户",
       key: "tenantId",
       render: (record: any) => record.data?.tenantId || "-",

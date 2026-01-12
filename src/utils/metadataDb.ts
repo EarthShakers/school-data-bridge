@@ -12,11 +12,10 @@ export const metadataDb =
       "mysql://root:hyt123456@120.46.13.170:3306/school_data_bridge",
     pool: {
       min: 0,
-      max: 20, // 👈 下调到 20 更加安全
-      acquireTimeoutMillis: 120000,
+      max: 10, // 👈 调低最大连接数，防止占用过多数据库资源
+      acquireTimeoutMillis: 60000, // 👈 延长等待时间
       idleTimeoutMillis: 30000,
       reapIntervalMillis: 1000,
-      createTimeoutMillis: 60000,
     },
   });
 

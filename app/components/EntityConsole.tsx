@@ -19,6 +19,7 @@ import {
   Form,
   Input,
   message,
+  Drawer,
   Tabs,
   Tag,
 } from "antd";
@@ -107,6 +108,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [logModalVisible, setLogModalVisible] = useState(false);
+  const [configDrawerVisible, setConfigDrawerVisible] = useState(false);
   const [targetEnv, setTargetEnv] = useState<string | undefined>(undefined);
   const [envs, setEnvs] = useState<EnvironmentConfig[]>([]);
 
@@ -220,6 +222,13 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       render: (t: string) => dayjs(t).format("YYYY-MM-DD HH:mm:ss"),
     },
     {
+      title: "traceId",
+      render: (record: any) => record.traceId || "-",
+      key: "traceId",
+      width: 200,
+      ellipsis: true,
+    },
+    {
       title: "状态",
       key: "status",
       render: (record: any) => {
@@ -324,102 +333,61 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   return (
     <div style={{ marginTop: 16 }}>
       <Row gutter={24}>
-        <Col span={14}>
-          <Card
-            title={
-              <span>
-                <SettingOutlined /> 配置编辑 (JSON5)
-              </span>
-            }
-            extra={
-              <Space>
-                <Button
-                  icon={<FileTextOutlined />}
-                  onClick={() => {
-                    try {
-                      setConfig(JSON.stringify(JSON5.parse(config), null, 2));
-                    } catch (e: any) {
-                      message.warning("无法格式化：" + e.message);
-                    }
-                  }}
-                >
-                  格式化
-                </Button>
-                <Button
-                  type="primary"
-                  icon={<SaveOutlined />}
-                  onClick={saveConfig}
-                  loading={loadingConfig}
-                >
-                  保存配置
-                </Button>
-              </Space>
-            }
-          >
-            <div
-              style={{
-                border: "1px solid #d9d9d9",
-                borderRadius: "4px",
-                overflow: "hidden",
-              }}
-            >
-              <Editor
-                height="600px"
-                language="json"
-                value={config}
-                theme="light"
-                onChange={(value) => setConfig(value || "")}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 13,
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  tabSize: 2,
-                  formatOnPaste: true,
-                }}
-                path={`${tenantId}-${entityType}.json`}
-              />
-            </div>
-          </Card>
-        </Col>
-        <Col span={10}>
+        <Col span={24}>
           <Card
             title={
               <span>
                 <SyncOutlined /> 任务控制
               </span>
             }
+            extra={
+              <Button
+                icon={<SettingOutlined />}
+                onClick={() => setConfigDrawerVisible(true)}
+              >
+                编辑实体配置
+              </Button>
+            }
             style={{ marginBottom: 24 }}
           >
-            <div style={{ marginBottom: 16 }}>
-              <Text strong style={{ display: "block", marginBottom: 8 }}>
-                <CloudServerOutlined /> 目标写入环境:
-              </Text>
-              <Select
-                placeholder="请选择 Java 服务环境"
-                style={{ width: "100%" }}
-                value={targetEnv}
-                onChange={setTargetEnv}
-              >
-                {envs.map((env) => (
-                  <Option key={env.id} value={env.id}>
-                    {env.name}
-                  </Option>
-                ))}
-              </Select>
-            </div>
-            <Button
-              type="primary"
-              danger
-              icon={<SyncOutlined />}
-              block
-              size="large"
-              disabled={!targetEnv}
-              onClick={handleSync}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 16,
+              }}
             >
-              立即执行手动同步
-            </Button>
+              <div style={{ flex: 1 }}>
+                <Text strong style={{ display: "block", marginBottom: 8 }}>
+                  <CloudServerOutlined /> 目标写入环境:
+                </Text>
+                <Select
+                  placeholder="请选择 Java 服务环境"
+                  style={{ width: "100%" }}
+                  value={targetEnv}
+                  onChange={setTargetEnv}
+                >
+                  {envs.map((env) => (
+                    <Option key={env.id} value={env.id}>
+                      {env.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <Button
+                type="primary"
+                danger
+                icon={<SyncOutlined />}
+                size="large"
+                disabled={!targetEnv}
+                onClick={handleSync}
+                style={{ minWidth: 200 }}
+              >
+                立即执行同步
+              </Button>
+            </div>
           </Card>
+
           <Card
             title={
               <div
@@ -450,13 +418,80 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
               columns={logColumns}
               size="small"
               loading={loadingLogs}
-              pagination={{ pageSize: 5 }}
+              pagination={{ pageSize: 10 }} // 增加到 10 条
               rowKey="id"
+              scroll={{ x: 1000 }}
             />
           </Card>
         </Col>
       </Row>
 
+      <Drawer
+        title={
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingRight: 24,
+            }}
+          >
+            <span>
+              <SettingOutlined /> 配置编辑 - {entityType.toUpperCase()}
+            </span>
+            <Space>
+              <Button
+                icon={<FileTextOutlined />}
+                onClick={() => {
+                  try {
+                    setConfig(JSON.stringify(JSON5.parse(config), null, 2));
+                  } catch (e: any) {
+                    message.warning("无法格式化：" + e.message);
+                  }
+                }}
+              >
+                格式化
+              </Button>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                onClick={async () => {
+                  await saveConfig();
+                  // setConfigDrawerVisible(false); // 保存后不一定关闭，方便连续修改
+                }}
+                loading={loadingConfig}
+              >
+                保存配置
+              </Button>
+            </Space>
+          </div>
+        }
+        placement="right"
+        width={1000}
+        onClose={() => setConfigDrawerVisible(false)}
+        open={configDrawerVisible}
+        bodyStyle={{ padding: 0 }}
+        closable={false} // 使用自定义标题栏
+      >
+        <div style={{ height: "100%" }}>
+          <Editor
+            height="100%"
+            language="json"
+            value={config}
+            theme="light"
+            onChange={(value) => setConfig(value || "")}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 13,
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              tabSize: 2,
+              formatOnPaste: true,
+            }}
+            path={`${tenantId}-${entityType}.json`}
+          />
+        </div>
+      </Drawer>
       <Modal
         title={
           <Title level={4} style={{ margin: 0 }}>
@@ -572,69 +607,10 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                       </Col>
                       <Col span={6}>
                         <Divider orientation="left">
-                          <WarningOutlined style={{ color: "#faad14" }} /> 3.
-                          Java 业务失败
-                        </Divider>
-                        <div style={{ height: 500, overflow: "auto" }}>
-                          <Table
-                            dataSource={getFailedSublist("java").map(
-                              (d: any, i: number) => ({ ...d, key: i })
-                            )}
-                            size="small"
-                            pagination={false}
-                            columns={[
-                              {
-                                title: "ID",
-                                dataIndex: ["data", "id"],
-                                width: 80,
-                              },
-                              {
-                                title: "Java 报错原因",
-                                dataIndex: "reason",
-                                render: (r) => {
-                                  let reasonStr = "";
-                                  if (typeof r === "string") {
-                                    reasonStr = r
-                                      .replace("[Java业务] ", "")
-                                      .replace("[数据校验] ", "");
-                                    // 尝试解析内部 JSON 以获得更美观的展示（针对 Zod 错误）
-                                    if (reasonStr.startsWith("{")) {
-                                      try {
-                                        const parsed = JSON.parse(reasonStr);
-                                        reasonStr = JSON.stringify(
-                                          parsed,
-                                          null,
-                                          2
-                                        );
-                                      } catch (e) {}
-                                    }
-                                  } else {
-                                    reasonStr = JSON.stringify(r, null, 2);
-                                  }
-
-                                  return (
-                                    <Text
-                                      type="warning"
-                                      style={{
-                                        fontSize: 10,
-                                        whiteSpace: "pre-wrap",
-                                      }}
-                                    >
-                                      {reasonStr}
-                                    </Text>
-                                  );
-                                },
-                              },
-                            ]}
-                          />
-                        </div>
-                      </Col>
-                      <Col span={6}>
-                        <Divider orientation="left">
                           <ExclamationCircleOutlined
                             style={{ color: "#ff4d4f" }}
                           />{" "}
-                          4. Zod 校验失败
+                          3. Zod 校验失败
                         </Divider>
                         <div style={{ height: 500, overflow: "auto" }}>
                           <Table
@@ -678,6 +654,65 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                                   return (
                                     <Text
                                       type="danger"
+                                      style={{
+                                        fontSize: 10,
+                                        whiteSpace: "pre-wrap",
+                                      }}
+                                    >
+                                      {reasonStr}
+                                    </Text>
+                                  );
+                                },
+                              },
+                            ]}
+                          />
+                        </div>
+                      </Col>
+                      <Col span={6}>
+                        <Divider orientation="left">
+                          <WarningOutlined style={{ color: "#faad14" }} /> 4.
+                          Java 业务失败
+                        </Divider>
+                        <div style={{ height: 500, overflow: "auto" }}>
+                          <Table
+                            dataSource={getFailedSublist("java").map(
+                              (d: any, i: number) => ({ ...d, key: i })
+                            )}
+                            size="small"
+                            pagination={false}
+                            columns={[
+                              {
+                                title: "ID",
+                                dataIndex: ["data", "id"],
+                                width: 80,
+                              },
+                              {
+                                title: "Java 报错原因",
+                                dataIndex: "reason",
+                                render: (r) => {
+                                  let reasonStr = "";
+                                  if (typeof r === "string") {
+                                    reasonStr = r
+                                      .replace("[Java业务] ", "")
+                                      .replace("[数据校验] ", "");
+                                    // 尝试解析内部 JSON 以获得更美观的展示（针对 Zod 错误）
+                                    if (reasonStr.startsWith("{")) {
+                                      try {
+                                        const parsed = JSON.parse(reasonStr);
+                                        reasonStr = JSON.stringify(
+                                          parsed,
+                                          null,
+                                          2
+                                        );
+                                      } catch (e) {}
+                                    }
+                                  } else {
+                                    reasonStr = JSON.stringify(r, null, 2);
+                                  }
+
+                                  return (
+                                    <Text
+                                      type="warning"
                                       style={{
                                         fontSize: 10,
                                         whiteSpace: "pre-wrap",

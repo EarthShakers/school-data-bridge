@@ -37,10 +37,10 @@ class DbConnectionManager {
       sid,
     } = dataSource.config;
 
-    // 构造缓存 Key：租户ID + 核心连接参数
-    const cacheKey = `${tenantId}:${dbType}:${
-      connectionString || host
-    }:${port}:${user}:${database || sid}`;
+    // 构造缓存 Key：核心连接参数 (去掉 tenantId，让共享 DB 的学校复用连接池)
+    const cacheKey = `${dbType}:${connectionString || host}:${port}:${user}:${
+      database || sid
+    }`;
 
     if (this.connections.has(cacheKey)) {
       // console.log(`[DbManager] ♻️ Reusing connection for ${tenantId}`);
@@ -85,11 +85,11 @@ class DbConnectionManager {
       connection: knexConnection,
       pool: {
         min: 0,
-        max: 5, // 👈 为每个学校保留少量长连接
-        acquireTimeoutMillis: 60000,
-        idleTimeoutMillis: 300000, // 👈 闲置 5 分钟后才真正关闭
+        max: 3, // 👈 下调到 3，减轻数据库负担。一个同步任务通常只需要 1 个连接。
+        acquireTimeoutMillis: 60000, // 👈 增加到 60 秒，给慢查询更多排队时间
+        idleTimeoutMillis: 30000, // 闲置 30 秒释放
+        reapIntervalMillis: 1000,
       },
-      acquireConnectionTimeout: 60000,
     });
 
     this.connections.set(cacheKey, db);
@@ -138,15 +138,17 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
         .select(queryFields)
         .from(viewName)
         .limit(batchSize)
-        .offset(offset);
+        .offset(offset)
+        .timeout(30000); // 👈 增加 30 秒超时强制释放
     } else if (modelName) {
       rawData = await db
         .select(queryFields)
         .from(modelName)
         .limit(batchSize)
-        .offset(offset);
+        .offset(offset)
+        .timeout(30000);
     } else if (sql) {
-      const result = await db.raw(sql);
+      const result = await db.raw(sql).timeout(30000);
       // 兼容不同驱动的返回格式
       if (Array.isArray(result)) {
         rawData = Array.isArray(result[0]) ? result[0] : result;
