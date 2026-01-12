@@ -22,11 +22,23 @@ export async function transformAndValidate(
   const item: any = {};
   const operate: any[] = [];
 
-  fieldMap.forEach((fm) => {
-    // 映射基础字段名 (Key 是目标，Value 是源路径)
+  if (!fieldMap || fieldMap.length === 0) {
+    console.error(
+      `[Pipeline] ❌ FATAL: fieldMap is empty for ${tenantId}:${entityType}`
+    );
+  }
+
+  // 🔧 增强：字段名不区分大小写，统一转大写匹配
+  const normalizedFieldMap = (fieldMap || []).map((fm) => ({
+    ...fm,
+    sourceField: fm.sourceField?.toUpperCase(),
+  }));
+
+  normalizedFieldMap.forEach((fm) => {
+    // 映射基础字段名 (Key 是目标，Value 是源路径 - 已经大写化)
     item[fm.targetField] = fm.sourceField;
 
-    // 如果有自定义转换逻辑，放入 operate 队列 (通过 run 处理值，通过 on 指定目标字段)
+    // 如果有自定义转换逻辑，放入 operate 队列
     if (fm.converter && fm.converter !== "default") {
       operate.push({
         run: (value: any) => {
@@ -43,25 +55,45 @@ export async function transformAndValidate(
     operate,
     // 在转换前过滤掉不符合条件的原始记录
     filter: (rawItem: any) => {
-      return fieldMap.every(
+      // 同样对 rawItem 的 Key 做大写化处理后再过滤
+      const upperRawItem: any = {};
+      Object.keys(rawItem).forEach(
+        (k) => (upperRawItem[k.toUpperCase()] = rawItem[k])
+      );
+
+      return normalizedFieldMap.every(
         (fm) =>
           !fm.required ||
-          (rawItem[fm.sourceField] !== undefined &&
-            rawItem[fm.sourceField] !== null)
+          (upperRawItem[fm.sourceField] !== undefined &&
+            upperRawItem[fm.sourceField] !== null)
       );
     },
   };
 
   // 2. 执行转换
-  const dataToTransform = Array.isArray(rawData) ? rawData : [rawData];
+  const rawDataArray = Array.isArray(rawData)
+    ? rawData.length > 0
+      ? rawData
+      : []
+    : [rawData];
+
+  if (rawDataArray.length === 0) {
+    console.warn(`[Pipeline] ⚠️ No data to transform for ${tenantId}`);
+    return { allRecords: [], successCount: 0, failedCount: 0 };
+  }
+
+  // 🔧 核心：将原始数据的所有 Key 统一转为大写，以支持不区分大小写的匹配
+  const dataToTransform = rawDataArray.map((row: any) => {
+    if (!row || typeof row !== "object") return row;
+    const upperRow: any = {};
+    Object.keys(row).forEach((k) => (upperRow[k.toUpperCase()] = row[k]));
+    return upperRow;
+  });
+
   const transformedData = transform(dataToTransform, transformMap);
 
   // 3. Zod 验证
   const allRecords: any[] = [];
-
-  if (transformedData.length > 0) {
-    console.log(`[Pipeline] Sample transformed item (before Zod):`, JSON.stringify(transformedData[0], null, 2));
-  }
 
   transformedData.forEach((item: any, index: number) => {
     const validation = schema.safeParse(item);

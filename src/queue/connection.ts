@@ -6,14 +6,20 @@ export const redisConfig = {
   port: Number(process.env.REDIS_PORT) || 6379,
   password: process.env.REDIS_PASSWORD || undefined,
   maxRetriesPerRequest: null,
-  connectTimeout: 10000, // 👈 延长到 10 秒
+  connectTimeout: 10000,
   enableReadyCheck: true,
-  enableOfflineQueue: false, // 👈 核心：连不上立即报错，不要 pending 几十秒
+  enableOfflineQueue: false,
   retryStrategy(times: number) {
-    if (times > 3) return null; // 👈 最多重试 3 次，失败就彻底放弃，触发前端报错
+    if (times > 3) return null;
     return Math.min(times * 500, 2000);
   },
 };
+
+console.log(
+  `[Redis] 📡 Attempting connection using config: ${redisConfig.host}:${
+    redisConfig.port
+  } (Source: ${process.env.REDIS_HOST ? "ENV" : "Default"})`
+);
 
 // 🔧 Next.js 单例模式优化：增加状态校验
 const globalForRedis = global as unknown as { redisConnection?: IORedis };
@@ -46,4 +52,13 @@ redisConnection.on("connect", () => {
 });
 
 // 队列名称常量
-export const QUEUE_NAME = "school-data-sync";
+// 优先级：环境变量手动指定 > 环境标识后缀 > 默认 dev 后缀
+const getQueueName = () => {
+  if (process.env.CUSTOM_QUEUE_NAME) return process.env.CUSTOM_QUEUE_NAME;
+  const suffix =
+    process.env.APP_ENV ||
+    (process.env.NODE_ENV === "production" ? "prod" : "dev");
+  return `school-data-sync-${suffix}`;
+};
+
+export const QUEUE_NAME = getQueueName();

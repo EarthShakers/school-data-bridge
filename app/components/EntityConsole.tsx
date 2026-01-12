@@ -418,8 +418,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
               columns={logColumns}
               size="small"
               loading={loadingLogs}
-              pagination={{ pageSize: 10 }} // 增加到 10 条
-              rowKey="id"
+              pagination={{ pageSize: 10 }}
+              rowKey="traceId" // 👈 改为 traceId，防止 id 冲突或缺失导致渲染旧数据
               scroll={{ x: 1000 }}
             />
           </Card>
