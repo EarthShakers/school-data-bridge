@@ -305,8 +305,19 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
     return selectedLog.failedData.filter((d: any) => {
       const reason = d.reason;
       if (!reason) return false;
-      if (type === "zod") return reason.includes("[数据校验]");
-      return reason.includes("[Java业务]");
+
+      // 如果是字符串，通过前缀判断
+      if (typeof reason === "string") {
+        if (type === "zod") return reason.includes("[数据校验]");
+        return reason.includes("[Java业务]");
+      }
+
+      // 如果是对象且有 _errors 结构（Zod format），归类为 zod
+      if (typeof reason === "object" && type === "zod") {
+        return true;
+      }
+
+      return false;
     });
   };
 
@@ -579,11 +590,39 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                               {
                                 title: "Java 报错原因",
                                 dataIndex: "reason",
-                                render: (r) => (
-                                  <Text type="warning" style={{ fontSize: 10 }}>
-                                    {r.replace("[Java业务] ", "")}
-                                  </Text>
-                                ),
+                                render: (r) => {
+                                  let reasonStr = "";
+                                  if (typeof r === "string") {
+                                    reasonStr = r
+                                      .replace("[Java业务] ", "")
+                                      .replace("[数据校验] ", "");
+                                    // 尝试解析内部 JSON 以获得更美观的展示（针对 Zod 错误）
+                                    if (reasonStr.startsWith("{")) {
+                                      try {
+                                        const parsed = JSON.parse(reasonStr);
+                                        reasonStr = JSON.stringify(
+                                          parsed,
+                                          null,
+                                          2
+                                        );
+                                      } catch (e) {}
+                                    }
+                                  } else {
+                                    reasonStr = JSON.stringify(r, null, 2);
+                                  }
+
+                                  return (
+                                    <Text
+                                      type="warning"
+                                      style={{
+                                        fontSize: 10,
+                                        whiteSpace: "pre-wrap",
+                                      }}
+                                    >
+                                      {reasonStr}
+                                    </Text>
+                                  );
+                                },
                               },
                             ]}
                           />
@@ -614,11 +653,39 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                               {
                                 title: "格式错误",
                                 dataIndex: "reason",
-                                render: (r) => (
-                                  <Text type="danger" style={{ fontSize: 10 }}>
-                                    {r.replace("[数据校验] ", "")}
-                                  </Text>
-                                ),
+                                render: (r) => {
+                                  let reasonStr = "";
+                                  if (typeof r === "string") {
+                                    reasonStr = r
+                                      .replace("[数据校验] ", "")
+                                      .replace("[Java业务] ", "");
+                                    // 尝试解析内部 JSON 以获得更美观的展示
+                                    if (reasonStr.startsWith("{")) {
+                                      try {
+                                        const parsed = JSON.parse(reasonStr);
+                                        reasonStr = JSON.stringify(
+                                          parsed,
+                                          null,
+                                          2
+                                        );
+                                      } catch (e) {}
+                                    }
+                                  } else {
+                                    reasonStr = JSON.stringify(r, null, 2);
+                                  }
+
+                                  return (
+                                    <Text
+                                      type="danger"
+                                      style={{
+                                        fontSize: 10,
+                                        whiteSpace: "pre-wrap",
+                                      }}
+                                    >
+                                      {reasonStr}
+                                    </Text>
+                                  );
+                                },
                               },
                             ]}
                           />

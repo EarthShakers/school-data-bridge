@@ -38,10 +38,16 @@ export async function saveImportResultToDb(
   );
 
   const failedDataWithReason = failedData.map(({ _importStatus, _importError, _metadata, ...rest }) => {
-    // 🔧 优化转换失败原因的提取，使其更易读
+    // 🔧 优化转换失败原因的提取，确保它是一个带有前缀的字符串，或者至少是安全的
     let reason = _importError;
-    if (typeof _importError === 'object' && _importError._errors) {
-       reason = JSON.stringify(_importError);
+    
+    if (typeof _importError === 'object') {
+      // 如果是 Zod 格式的对象 (带有 _errors)，添加前缀
+      if ((_importError as any)._errors || Object.keys(_importError).some(k => (_importError as any)[k]?._errors)) {
+        reason = `[数据校验] ${JSON.stringify(_importError)}`;
+      } else {
+        reason = JSON.stringify(_importError);
+      }
     }
     
     return {
