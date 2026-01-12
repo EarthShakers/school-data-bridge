@@ -7,7 +7,7 @@
     "start": "ts-node src/index.ts",
     "dev": "next dev",
     "build": "next build",
-    "postinstall": "mkdir -p public/monaco-vs && cp -r node_modules/monaco-editor/min/vs/* public/monaco-vs/",
+    "postinstall": "mkdir -p public/monaco-vs && cp -r node_modules/monaco-editor/min/vs public/monaco-vs/",
     "web:start": "next start",
     "lint": "next lint",
     "cli:dev": "ts-node-dev --respawn src/index.ts",

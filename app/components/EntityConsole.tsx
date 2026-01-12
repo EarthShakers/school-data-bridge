@@ -46,7 +46,28 @@ import { EnvironmentConfig } from "@/src/saveData/config";
 import { useRouter } from "next/navigation";
 
 if (typeof window !== "undefined") {
-  loader.config({ paths: { vs: window.location.origin + "/monaco-vs" } });
+  const monacoBase = window.location.origin + "/monaco-vs/vs";
+  loader.config({ paths: { vs: monacoBase } });
+
+  // 确保 Worker 路径正确
+  (window as any).MonacoEnvironment = {
+    baseUrl: window.location.origin + "/monaco-vs/", // 👈 必须以 / 结尾，因为 workerMain.js 会拼接 "vs/loader.js"
+    getWorkerUrl: function (_moduleId: any, label: string) {
+      if (label === "json") {
+        return `${monacoBase}/language/json/jsonWorker.js`;
+      }
+      if (label === "css" || label === "scss" || label === "less") {
+        return `${monacoBase}/language/css/cssWorker.js`;
+      }
+      if (label === "html" || label === "handlebars" || label === "razor") {
+        return `${monacoBase}/language/html/htmlWorker.js`;
+      }
+      if (label === "typescript" || label === "javascript") {
+        return `${monacoBase}/language/typescript/tsWorker.js`;
+      }
+      return `${monacoBase}/base/worker/workerMain.js`;
+    },
+  };
 }
 
 const Editor = dynamic(() => import("@monaco-editor/react"), {
@@ -282,7 +303,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   const getFailedSublist = (type: "zod" | "java") => {
     if (!selectedLog?.failedData) return [];
     return selectedLog.failedData.filter((d: any) => {
-      const reason = d.reason || "";
+      const reason = d.reason;
+      if (!reason) return false;
       if (type === "zod") return reason.includes("[数据校验]");
       return reason.includes("[Java业务]");
     });
@@ -344,8 +366,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                   tabSize: 2,
                   formatOnPaste: true,
                 }}
-                // @ts-ignore
-                path="/monaco-vs"
+                path={`${tenantId}-${entityType}.json`}
               />
             </div>
           </Card>
@@ -587,7 +608,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                                 title: "记录",
                                 dataIndex: ["data", "id"],
                                 width: 80,
-                                render: (id, row) => id || `Row ${row.key}`,
+                                render: (id: any, row: any) =>
+                                  id || `Row ${row.key}`,
                               },
                               {
                                 title: "格式错误",
