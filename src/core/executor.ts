@@ -150,10 +150,20 @@ export async function runSyncTask(
         // 2. 如果 Java 接口返回了具体的错误 ID 列表，精准修正为 failed
         if (javaResult.errors.length > 0) {
           javaResult.errors.forEach((javaErr) => {
-            const record = batchRecords.find((r) => r.id === javaErr.id);
+            // 🔧 增强匹配：将 ID 统一转为字符串并剔除空格，防止类型不匹配（如 123 vs "123"）
+            const searchId = String(javaErr.id).trim();
+            const record = batchRecords.find(
+              (r) => String(r.id).trim() === searchId
+            );
+
             if (record) {
               record._importStatus = "failed";
               record._importError = `[Java业务] ${javaErr.message}`;
+            } else {
+              // 调试：如果还是匹配不上，打印出来看看到底是什么 ID
+              console.warn(
+                `[Executor] ⚠️ Could not match Java error ID: "${javaErr.id}" in current batch.`
+              );
             }
           });
         }
