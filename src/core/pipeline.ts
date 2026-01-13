@@ -118,7 +118,7 @@ export async function transformAndValidate(
   });
 
   const successCount = allRecords.filter(
-    (r) => r._importStatus === "success"
+    (r) => r._importStatus === "pending_write"
   ).length;
   const failedCount = allRecords.length - successCount;
 

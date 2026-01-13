@@ -211,26 +211,47 @@ export async function runSyncTask(
       }
     }
 
-    // 6. 最终日志保存到数据库
+    // 6. 最终统计盘点 (极致准确口径)
+    const zodFailed = allCollectedRecords.filter(
+      (r) => r._importError && r._importError.includes("[数据校验]")
+    ).length;
+    const javaFailed = allCollectedRecords.filter(
+      (r) =>
+        r._importStatus === "failed" &&
+        (!r._importError || !r._importError.includes("[数据校验]"))
+    ).length;
+    const success = allCollectedRecords.filter(
+      (r) => r._importStatus === "success"
+    ).length;
+
+    const summaryStages = {
+      fetch: { total: totalProcessed, status: "success" },
+      transform: {
+        success: totalProcessed - zodFailed, // 没死在校验这一步的都算 transform 成功
+        failed: zodFailed,
+      },
+      write: { success: success, failed: javaFailed },
+    };
+
     await saveImportResultToDb(
       tenantId,
       entityType,
       taskTraceId,
       allCollectedRecords,
-      finalStages,
+      summaryStages,
       rawDataSample,
-      allBatchDetails // 传入所有批次的详细信息
+      allBatchDetails
     );
 
     console.log(
-      `\n[Executor] ✨ Task Completed: Total ${totalProcessed}, Written ${totalWritten}`
+      `\n[Executor] ✨ Task Completed: Total ${totalProcessed}, Success ${success}, ZodFail ${zodFailed}, JavaFail ${javaFailed}`
     );
 
     return {
       success: true,
       total: totalProcessed,
-      written: totalWritten,
-      failed: totalFailed + finalStages.write.failed,
+      written: success,
+      failed: zodFailed + javaFailed,
     };
   } catch (error: any) {
     console.error(

@@ -604,7 +604,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                     <Row gutter={16}>
                       <Col span={6}>
                         <Divider orientation="left">
-                          <DatabaseOutlined /> 1. 抓取元数据
+                          <DatabaseOutlined /> 1. 抓取元数据 (
+                          {selectedLog.stages?.fetch?.total || 0})
                         </Divider>
                         <div
                           style={{
@@ -631,7 +632,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                       </Col>
                       <Col span={6}>
                         <Divider orientation="left">
-                          <CheckCircleOutlined /> 2. 写入成功记录
+                          <CheckCircleOutlined /> 2. 写入成功记录 (
+                          {selectedLog.successData?.length || 0})
                         </Divider>
                         <div
                           style={{
@@ -657,7 +659,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                           <ExclamationCircleOutlined
                             style={{ color: "#ff4d4f" }}
                           />{" "}
-                          3. Zod 校验失败
+                          3. Zod 校验失败 ({getFailedSublist("zod").length})
                         </Divider>
                         <div style={{ height: 500, overflow: "auto" }}>
                           <Table
@@ -718,7 +720,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                       <Col span={6}>
                         <Divider orientation="left">
                           <WarningOutlined style={{ color: "#faad14" }} /> 4.
-                          Java 业务失败
+                          Java 业务失败 ({getFailedSublist("java").length})
                         </Divider>
                         <div style={{ height: 500, overflow: "auto" }}>
                           <Table
