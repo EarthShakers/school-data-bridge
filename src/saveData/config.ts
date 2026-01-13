@@ -22,9 +22,26 @@ export async function getSystemEnvironments(): Promise<EnvironmentConfig[]> {
 
   // 回退默认值
   return [
-    { id: "dev", name: "开发环境 (Dev)", url: process.env.JAVA_USER_SERVICE_BASE_URL_DEV || "http://localhost:8080" },
-    { id: "test", name: "测试环境 (Test)", url: process.env.JAVA_USER_SERVICE_BASE_URL_TEST || "http://test-api.example.com" },
-    { id: "prod", name: "生产环境 (Prod)", url: process.env.JAVA_USER_SERVICE_BASE_URL_PROD || "https://api.example.com" },
+    {
+      id: "dev",
+      name: "开发环境 (Dev)",
+      url:
+        process.env.JAVA_USER_SERVICE_BASE_URL_DEV || "http://localhost:8080",
+    },
+    {
+      id: "test",
+      name: "测试环境 (Test)",
+      url:
+        process.env.JAVA_USER_SERVICE_BASE_URL_TEST ||
+        "http://test-api.example.com",
+    },
+    {
+      id: "prod",
+      name: "生产环境 (Prod)",
+      url:
+        process.env.JAVA_USER_SERVICE_BASE_URL_PROD ||
+        "https://api.example.com",
+    },
   ];
 }
 
@@ -45,15 +62,15 @@ export async function getEndpointForEntity(
   envId: string = "dev"
 ): Promise<string> {
   const envs = await getSystemEnvironments();
-  const targetEnv = envs.find(e => e.id === envId) || envs[0];
+  const targetEnv = envs.find((e) => e.id === envId) || envs[0];
   const base = targetEnv.url;
 
   const map: Record<EntityType, string> = {
-    teacher: `${base}/v1/base/teacher/batch`,
-    student: `${base}/v1/base/stu/batch`,
-    teacherOrganizations: `${base}/v1/base/teacher/org/batch`,
-    studentOrganizations: `${base}/v1/base/stu/org/batch`,
-    class: `${base}/v1/base/course-class/batch`,
+    teacher: `${base}/integration/v1/base/teacher/batch`,
+    student: `${base}/integration/v1/base/stu/batch`,
+    teacherOrganizations: `${base}/integration/v1/base/teacher/org/batch`,
+    studentOrganizations: `${base}/integration/v1/base/stu/org/batch`,
+    class: `${base}/integration/v1/base/course-class/batch`,
   };
   return map[entityType] || `${base}/v1/base/data/batch`;
 }

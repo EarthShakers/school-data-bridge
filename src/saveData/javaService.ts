@@ -69,6 +69,7 @@ export async function writeToInternalJavaService(
           headers: {
             "Content-Type": "application/json",
             Authorization: authToken || "",
+            "client-secret": "8140234792347023482",
           },
           timeout: baseConfig.JAVA_USER_SERVICE_TIMEOUT,
         });
