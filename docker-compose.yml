@@ -9,6 +9,7 @@ services:
     restart: always
     environment:
       - PORT=9235 # 👈 强制让 Next.js 监听 9235，避开 3000 冲突
+      - HOSTNAME=0.0.0.0 # 👈 增加：允许外部通过公网 IP 访问
       - RUN_MODE=manual
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
