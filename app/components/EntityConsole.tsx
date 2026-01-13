@@ -109,6 +109,8 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [configDrawerVisible, setConfigDrawerVisible] = useState(false);
+  const [sqlModalVisible, setSqlModalVisible] = useState(false);
+  const [sqlContent, setSqlContent] = useState("");
   const [targetEnv, setTargetEnv] = useState<string | undefined>(undefined);
   const [envs, setEnvs] = useState<EnvironmentConfig[]>([]);
 
@@ -168,6 +170,46 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       message.error("获取日志失败");
     } finally {
       setLoadingLogs(false);
+    }
+  };
+
+  const openSqlHelper = () => {
+    try {
+      const parsed = JSON5.parse(config);
+      const sql = parsed.dataSource?.config?.sql;
+      if (sql) {
+        setSqlContent(Array.isArray(sql) ? sql.join("\n") : sql);
+      } else {
+        setSqlContent("");
+      }
+      setSqlModalVisible(true);
+    } catch (e: any) {
+      message.error("解析配置失败，请先确保 JSON 格式正确: " + e.message);
+    }
+  };
+
+  const applySqlHelper = () => {
+    try {
+      const parsed = JSON5.parse(config);
+      if (!parsed.dataSource) parsed.dataSource = { type: "db", config: {} };
+      if (!parsed.dataSource.config) parsed.dataSource.config = {};
+
+      // 将 SQL 字符串按行拆分为数组
+      const sqlArray = sqlContent
+        .split("\n")
+        .map((line) => line.trimEnd())
+        .filter((line, index, array) => {
+          // 保留中间的空行，但去掉末尾的纯空行
+          if (line.trim() === "" && index === array.length - 1) return false;
+          return true;
+        });
+
+      parsed.dataSource.config.sql = sqlArray;
+      setConfig(JSON.stringify(parsed, null, 2));
+      setSqlModalVisible(false);
+      message.success("SQL 已转换并应用到配置");
+    } catch (e: any) {
+      message.error("应用失败: " + e.message);
     }
   };
 
@@ -440,6 +482,9 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
               <SettingOutlined /> 配置编辑 - {entityType.toUpperCase()}
             </span>
             <Space>
+              <Button icon={<DatabaseOutlined />} onClick={openSqlHelper}>
+                SQL 助手
+              </Button>
               <Button
                 icon={<FileTextOutlined />}
                 onClick={() => {
@@ -788,6 +833,45 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
             ]}
           />
         )}
+      </Modal>
+
+      <Modal
+        title={
+          <span>
+            <DatabaseOutlined /> SQL 编辑助手 (自动转为 JSON 数组)
+          </span>
+        }
+        open={sqlModalVisible}
+        onCancel={() => setSqlModalVisible(false)}
+        onOk={applySqlHelper}
+        width={1000}
+        okText="转换并插入配置"
+        cancelText="取消"
+        destroyOnClose
+      >
+        <div style={{ height: "500px", border: "1px solid #d9d9d9" }}>
+          <Editor
+            height="100%"
+            language="sql"
+            value={sqlContent}
+            theme="light"
+            onChange={(value) => setSqlContent(value || "")}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 13,
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              tabSize: 2,
+            }}
+          />
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            💡 提示：在这里像往常一样编写带换行的
+            SQL。点击确定后，它会自动转换为 JSON 数组并替换配置中的{" "}
+            <code>sql</code> 字段。
+          </Text>
+        </div>
       </Modal>
     </div>
   );

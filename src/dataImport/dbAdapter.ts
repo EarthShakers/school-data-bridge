@@ -148,8 +148,10 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
         .offset(offset)
         .timeout(30000);
     } else if (sql) {
-      const result = await db.raw(sql).timeout(30000);
-      // 兼容不同驱动的返回格式
+      // 🔧 增强：支持 SQL 数组格式，方便在 JSON 中多行书写
+      const finalSql = Array.isArray(sql) ? sql.join("\n") : sql;
+      console.log(`[DbAdapter] 🔍 Executing Raw SQL: ${finalSql}`);
+      const result = await db.raw(finalSql).timeout(30000);
       if (Array.isArray(result)) {
         rawData = Array.isArray(result[0]) ? result[0] : result;
       } else {
