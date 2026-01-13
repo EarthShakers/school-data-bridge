@@ -148,9 +148,15 @@ export async function fetchFromDb(config: SchoolConfig): Promise<DataEnvelope> {
         .offset(offset)
         .timeout(30000);
     } else if (sql) {
-      // 🔧 增强：支持 SQL 数组格式，并自动清理末尾分号
+      // 🔧 增强：支持 SQL 数组格式，并彻底清理末尾所有分号和空白字符
       const rawSql = Array.isArray(sql) ? sql.join("\n") : sql;
-      const finalSql = rawSql.trim().replace(/;$/, "");
+      const finalSql = rawSql.trim().replace(/;[\s\n]*$/, "");
+
+      if (rawSql.includes(";")) {
+        console.log(
+          `[DbAdapter] 🧹 Auto-cleaned trailing semicolon for Oracle.`
+        );
+      }
 
       console.log(`[DbAdapter] 🔍 Executing Raw SQL: ${finalSql}`);
       const result = await db.raw(finalSql).timeout(30000);

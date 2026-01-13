@@ -15,10 +15,12 @@ export interface JavaWriteResult {
   success: number;
   failed: number;
   errors: { id: string; message: string }[];
-  debugInfo?: {
-    lastPayload: any;
-    lastResponse: any;
-  };
+  batchDetails: {
+    batchIndex: number;
+    payload: any;
+    response: any;
+    status: "success" | "failed";
+  }[];
 }
 
 /**
@@ -35,7 +37,7 @@ export async function writeToInternalJavaService(
   let successCount = 0;
   let failedCount = 0;
   const allErrors: { id: string; message: string }[] = [];
-  let debugInfo: any = null;
+  const batchDetails: JavaWriteResult["batchDetails"] = [];
 
   const wrapperMap: Record<EntityType, string> = {
     teacher: "teachers",
@@ -55,13 +57,16 @@ export async function writeToInternalJavaService(
   const tasks = batches.map((batch, index) => {
     return limit(async () => {
       let payload: any = null;
+      let status: "success" | "failed" = "success";
+      let resData: any = null;
+
       try {
         payload = {
           [wrapperKey]: batch,
         };
 
         if (entityType === "class" || entityType === "studentOrganizations") {
-          payload.batchId = `batch_${Date.now()}`;
+          payload.batchId = `batch_${Date.now()}_${index}`;
           payload.semesterId = "default";
         }
 
@@ -74,20 +79,18 @@ export async function writeToInternalJavaService(
           timeout: baseConfig.JAVA_USER_SERVICE_TIMEOUT,
         });
 
-        const resData = response.data;
+        resData = response.data;
 
         if (
           resData &&
           resData.code &&
-          resData.code !== "200" &&
-          resData.code !== "0" &&
-          resData.code !== "success"
+          !["200", "0", "success"].includes(String(resData.code))
         ) {
-          // 业务错误，记录 debug 信息
-          debugInfo = { lastPayload: payload, lastResponse: resData };
+          status = "failed";
           throw new Error(`Java 业务错误: ${resData.message || "未知原因"}`);
         }
 
+        // 处理部分成功部分失败 (Java 接口返回 data 数组的情况)
         if (resData && Array.isArray(resData.data) && resData.data.length > 0) {
           resData.data.forEach((err: any) => {
             allErrors.push({
@@ -101,26 +104,28 @@ export async function writeToInternalJavaService(
           const failedInJava = resData.data.length;
           failedCount += failedInJava;
           successCount += batch.length - failedInJava;
+          if (failedInJava > 0) status = "failed";
         } else {
           successCount += batch.length;
         }
       } catch (error: any) {
+        status = "failed";
         failedCount += batch.length;
         const errMsg = error.response?.data?.message || error.message;
-
-        // 捕获网络或协议级错误的 Debug 信息
-        if (!debugInfo) {
-          debugInfo = {
-            lastPayload: payload,
-            lastResponse: error.response?.data || error.message,
-          };
-        }
+        resData = error.response?.data || error.message;
 
         batch.forEach((item: any) => {
           allErrors.push({
             id: item.id || "batch-error",
             message: `Java 接口失败: ${errMsg}`,
           });
+        });
+      } finally {
+        batchDetails.push({
+          batchIndex: index + 1,
+          payload,
+          response: resData,
+          status,
         });
       }
     });
@@ -131,6 +136,6 @@ export async function writeToInternalJavaService(
     success: successCount,
     failed: failedCount,
     errors: allErrors,
-    debugInfo,
+    batchDetails,
   };
 }

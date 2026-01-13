@@ -111,6 +111,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   const [configDrawerVisible, setConfigDrawerVisible] = useState(false);
   const [sqlModalVisible, setSqlModalVisible] = useState(false);
   const [sqlContent, setSqlContent] = useState("");
+  const [selectedBatchIndex, setSelectedBatchIndex] = useState(0); // 👈 新增：当前选中的 Batch 索引
   const [targetEnv, setTargetEnv] = useState<string | undefined>(undefined);
   const [envs, setEnvs] = useState<EnvironmentConfig[]>([]);
 
@@ -220,6 +221,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
       );
       const data = await res.json();
       setSelectedLog(data);
+      setSelectedBatchIndex(0); // 👈 默认选中第一批
       setLogModalVisible(true);
     } catch (err) {
       message.error("读取详细日志失败");
@@ -784,50 +786,85 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                   </span>
                 ),
                 children: (
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Divider orientation="left">发送 Payload</Divider>
-                      <div
-                        style={{
-                          background: "#1e1e1e",
-                          color: "#d4d4d4",
-                          padding: 12,
-                          borderRadius: 4,
-                          height: 550,
-                          overflow: "auto",
-                        }}
-                      >
-                        <pre style={{ fontSize: 12 }}>
-                          {JSON.stringify(
-                            selectedLog.writeFailureDetails?.lastPayload,
-                            null,
-                            2
-                          )}
-                        </pre>
+                  <div>
+                    {selectedLog.writeFailureDetails &&
+                    Array.isArray(selectedLog.writeFailureDetails) &&
+                    selectedLog.writeFailureDetails.length > 0 ? (
+                      <div style={{ marginBottom: 16 }}>
+                        <Space>
+                          <Text strong>选择执行批次:</Text>
+                          <Select
+                            value={selectedBatchIndex}
+                            onChange={setSelectedBatchIndex}
+                            style={{ width: 300 }}
+                          >
+                            {selectedLog.writeFailureDetails.map(
+                              (batch: any, idx: number) => (
+                                <Option key={idx} value={idx}>
+                                  第 {batch.batchIndex} 批 - [
+                                  {batch.status === "success" ? "成功" : "失败"}
+                                  ]
+                                </Option>
+                              )
+                            )}
+                          </Select>
+                        </Space>
                       </div>
-                    </Col>
-                    <Col span={12}>
-                      <Divider orientation="left">返回 Response</Divider>
-                      <div
-                        style={{
-                          background: "#1e1e1e",
-                          color: "#ce9178",
-                          padding: 12,
-                          borderRadius: 4,
-                          height: 550,
-                          overflow: "auto",
-                        }}
-                      >
-                        <pre style={{ fontSize: 12 }}>
-                          {JSON.stringify(
-                            selectedLog.writeFailureDetails?.lastResponse,
-                            null,
-                            2
-                          )}
-                        </pre>
-                      </div>
-                    </Col>
-                  </Row>
+                    ) : null}
+
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Divider orientation="left">发送 Payload</Divider>
+                        <div
+                          style={{
+                            background: "#1e1e1e",
+                            color: "#d4d4d4",
+                            padding: 12,
+                            borderRadius: 4,
+                            height: 500,
+                            overflow: "auto",
+                          }}
+                        >
+                          <pre style={{ fontSize: 12 }}>
+                            {JSON.stringify(
+                              Array.isArray(selectedLog.writeFailureDetails)
+                                ? selectedLog.writeFailureDetails[
+                                    selectedBatchIndex
+                                  ]?.payload
+                                : selectedLog.writeFailureDetails?.lastPayload,
+                              null,
+                              2
+                            )}
+                          </pre>
+                        </div>
+                      </Col>
+                      <Col span={12}>
+                        <Divider orientation="left">返回 Response</Divider>
+                        <div
+                          style={{
+                            background: "#1e1e1e",
+                            color: "#ce9178",
+                            padding: 12,
+                            borderRadius: 4,
+                            height: 500,
+                            overflow: "auto",
+                          }}
+                        >
+                          <pre style={{ fontSize: 12 }}>
+                            {JSON.stringify(
+                              Array.isArray(selectedLog.writeFailureDetails)
+                                ? selectedLog.writeFailureDetails[
+                                    selectedBatchIndex
+                                  ]?.response
+                                : selectedLog.writeFailureDetails?.lastResponse,
+                              null,
+                              2
+                            )}
+                          </pre>
+                        </div>
+                      </Col>
+                    </Row>
+                  </div>
                 ),
               },
             ]}

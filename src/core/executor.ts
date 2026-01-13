@@ -28,7 +28,7 @@ export async function runSyncTask(
   let totalFailed = 0;
   let allCollectedRecords: any[] = [];
   let rawDataSample: any[] = [];
-  let lastWriteFailure: any = null; // 新增：保存最后的写入失败详情
+  let allBatchDetails: any[] = []; // 存储所有批次的详情
   let finalStages = {
     fetch: { total: 0, status: "success" },
     transform: { success: 0, failed: 0 },
@@ -135,17 +135,31 @@ export async function runSyncTask(
           `[Executor] 📤 Write batch took ${Date.now() - writeStart}ms`
         );
 
-        if (javaResult.debugInfo) {
-          lastWriteFailure = javaResult.debugInfo;
+        if (javaResult.batchDetails) {
+          allBatchDetails.push(...javaResult.batchDetails);
         }
 
-        // 🚨 核心：如果 Java 写入有失败，将原因同步到 batchRecords 中，但不再修改 transform 的统计计数
+        // 🚨 核心改进：严谨更新每一条记录的状态
+        // 1. 如果 Java 接口返回了具体的错误 ID 列表
         if (javaResult.errors.length > 0) {
           javaResult.errors.forEach((javaErr) => {
             const record = batchRecords.find((r) => r.id === javaErr.id);
             if (record) {
               record._importStatus = "failed";
               record._importError = `[Java业务] ${javaErr.message}`;
+            }
+          });
+        }
+
+        // 2. 对于那些依然是 success 但实际上所属的批次全挂了的情况 (例如网络超时)
+        // 这一步非常关键：只有在 javaResult 中没有报错 ID，且整体批次成功的记录，才维持 success
+        // 实际上，只要是在当前 batch 中没被 javaResult.errors 命中的，且 javaResult 整体没崩溃的，才算成功
+        // 如果 javaResult.success 为 0 且失败数 > 0，说明整批都挂了
+        if (javaResult.success === 0 && dataToWrite.length > 0) {
+          batchRecords.forEach((r) => {
+            if (r._importStatus === "success") {
+              r._importStatus = "failed";
+              r._importError = `[Java接口] 整批写入失败，请检查 Debug 信息`;
             }
           });
         }
@@ -200,7 +214,7 @@ export async function runSyncTask(
       allCollectedRecords,
       finalStages,
       rawDataSample,
-      lastWriteFailure // 传入失败详情
+      allBatchDetails // 传入所有批次的详细信息
     );
 
     console.log(
@@ -236,7 +250,7 @@ export async function runSyncTask(
           write: finalStages.write,
         },
         rawDataSample,
-        lastWriteFailure
+        allBatchDetails
       );
     } catch (dbError: any) {
       console.error(
