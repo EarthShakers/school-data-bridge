@@ -98,12 +98,12 @@ export async function transformAndValidate(
   transformedData.forEach((item: any, index: number) => {
     const validation = schema.safeParse(item);
     if (validation.success) {
-      // 🔧 增强：剔除值为 undefined 的 Key，确保不发往 Java 接口
+      // 🔧 增强：剔除值为 undefined 的 Key，并将状态设为待写入
       const cleanData = JSON.parse(JSON.stringify(validation.data));
 
       allRecords.push({
         ...cleanData,
-        _importStatus: "success",
+        _importStatus: "pending_write", // 👈 改为待写入，而不是直接成功
         _metadata: { traceId, tenantId, index },
       });
     } else {

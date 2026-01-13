@@ -81,13 +81,27 @@ export async function writeToInternalJavaService(
 
         resData = response.data;
 
-        if (
-          resData &&
-          resData.code &&
-          !["200", "0", "success"].includes(String(resData.code))
-        ) {
+        // 🔧 更加稳健的成功判定
+        const code =
+          resData && resData.code !== undefined
+            ? String(resData.code).toLowerCase()
+            : null;
+        const isSuccess =
+          !code || // 如果没有 code 字段，通常 HTTP 200 就代表成功
+          ["200", "0", "1", "success", "ok", "true", "201", "e200"].includes(
+            code
+          );
+
+        const successFlag =
+          resData && (resData.success === true || resData.success === "true");
+
+        if (resData && !isSuccess && !successFlag) {
           status = "failed";
-          throw new Error(`Java 业务错误: ${resData.message || "未知原因"}`);
+          throw new Error(
+            `Java 业务错误: ${resData.message || "未知原因"} (Code: ${
+              resData.code
+            })`
+          );
         }
 
         // 处理部分成功部分失败 (Java 接口返回 data 数组的情况)

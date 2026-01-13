@@ -118,7 +118,7 @@ export async function runSyncTask(
 
       // 4. 写入 Java 服务
       const dataToWrite = batchRecords
-        .filter((r) => r._importStatus === "success")
+        .filter((r) => r._importStatus === "pending_write") // 👈 只处理待写入的数据
         .map(({ _importStatus, _importError, _metadata, ...rest }) => rest);
 
       if (dataToWrite.length > 0) {
@@ -140,7 +140,14 @@ export async function runSyncTask(
         }
 
         // 🚨 核心改进：严谨更新每一条记录的状态
-        // 1. 如果 Java 接口返回了具体的错误 ID 列表
+        // 1. 先把当前批次所有 pending_write 的改为 success (乐观假设当前批次接口层没崩)
+        batchRecords.forEach((r) => {
+          if (r._importStatus === "pending_write") {
+            r._importStatus = "success";
+          }
+        });
+
+        // 2. 如果 Java 接口返回了具体的错误 ID 列表，精准修正为 failed
         if (javaResult.errors.length > 0) {
           javaResult.errors.forEach((javaErr) => {
             const record = batchRecords.find((r) => r.id === javaErr.id);
@@ -151,15 +158,13 @@ export async function runSyncTask(
           });
         }
 
-        // 2. 对于那些依然是 success 但实际上所属的批次全挂了的情况 (例如网络超时)
-        // 这一步非常关键：只有在 javaResult 中没有报错 ID，且整体批次成功的记录，才维持 success
-        // 实际上，只要是在当前 batch 中没被 javaResult.errors 命中的，且 javaResult 整体没崩溃的，才算成功
-        // 如果 javaResult.success 为 0 且失败数 > 0，说明整批都挂了
+        // 3. 兜底：如果整个接口调用判定为失败（比如 code 不是 200），则该批次全部标记为失败
         if (javaResult.success === 0 && dataToWrite.length > 0) {
           batchRecords.forEach((r) => {
+            // 排除掉已经是 Zod 校验失败的数据，只改本批次写入的数据
             if (r._importStatus === "success") {
               r._importStatus = "failed";
-              r._importError = `[Java接口] 整批写入失败，请检查 Debug 信息`;
+              r._importError = `[Java接口] 写入失败，请在 Debug 窗口检查 Response`;
             }
           });
         }
