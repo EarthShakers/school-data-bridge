@@ -814,7 +814,38 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
 
                     <Row gutter={16}>
                       <Col span={12}>
-                        <Divider orientation="left">发送 Payload</Divider>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: 8,
+                            padding: "0 4px",
+                          }}
+                        >
+                          <Text strong>发送 Payload</Text>
+                          <Button
+                            size="small"
+                            type="link"
+                            icon={<FileTextOutlined />}
+                            onClick={() => {
+                              const content = JSON.stringify(
+                                Array.isArray(selectedLog.writeFailureDetails)
+                                  ? selectedLog.writeFailureDetails[
+                                      selectedBatchIndex
+                                    ]?.payload
+                                  : selectedLog.writeFailureDetails
+                                      ?.lastPayload,
+                                null,
+                                2
+                              );
+                              navigator.clipboard.writeText(content);
+                              message.success("Payload 已复制到剪贴板");
+                            }}
+                          >
+                            复制
+                          </Button>
+                        </div>
                         <div
                           style={{
                             background: "#1e1e1e",
@@ -825,7 +856,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                             overflow: "auto",
                           }}
                         >
-                          <pre style={{ fontSize: 12 }}>
+                          <pre style={{ fontSize: 12, margin: 0 }}>
                             {JSON.stringify(
                               Array.isArray(selectedLog.writeFailureDetails)
                                 ? selectedLog.writeFailureDetails[
@@ -839,7 +870,38 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                         </div>
                       </Col>
                       <Col span={12}>
-                        <Divider orientation="left">返回 Response</Divider>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: 8,
+                            padding: "0 4px",
+                          }}
+                        >
+                          <Text strong>返回 Response</Text>
+                          <Button
+                            size="small"
+                            type="link"
+                            icon={<FileTextOutlined />}
+                            onClick={() => {
+                              const content = JSON.stringify(
+                                Array.isArray(selectedLog.writeFailureDetails)
+                                  ? selectedLog.writeFailureDetails[
+                                      selectedBatchIndex
+                                    ]?.response
+                                  : selectedLog.writeFailureDetails
+                                      ?.lastResponse,
+                                null,
+                                2
+                              );
+                              navigator.clipboard.writeText(content);
+                              message.success("Response 已复制到剪贴板");
+                            }}
+                          >
+                            复制
+                          </Button>
+                        </div>
                         <div
                           style={{
                             background: "#1e1e1e",
@@ -850,7 +912,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                             overflow: "auto",
                           }}
                         >
-                          <pre style={{ fontSize: 12 }}>
+                          <pre style={{ fontSize: 12, margin: 0 }}>
                             {JSON.stringify(
                               Array.isArray(selectedLog.writeFailureDetails)
                                 ? selectedLog.writeFailureDetails[
