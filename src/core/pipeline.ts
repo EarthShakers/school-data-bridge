@@ -98,8 +98,11 @@ export async function transformAndValidate(
   transformedData.forEach((item: any, index: number) => {
     const validation = schema.safeParse(item);
     if (validation.success) {
+      // 🔧 增强：剔除值为 undefined 的 Key，确保不发往 Java 接口
+      const cleanData = JSON.parse(JSON.stringify(validation.data));
+
       allRecords.push({
-        ...validation.data,
+        ...cleanData,
         _importStatus: "success",
         _metadata: { traceId, tenantId, index },
       });
