@@ -5,21 +5,22 @@ services:
   web:
     build: .
     container_name: bridge-web
+    network_mode: "host" # 👈 核心：与宿主机共享网络
     restart: always
-    ports:
-      - "9235:3000" # 👈 将宿主机的 3001 映射到容器的 3000
     environment:
+      - PORT=9235 # 👈 强制让 Next.js 监听 9235，避开 3000 冲突
       - RUN_MODE=manual
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - METADATA_DB_URL=${METADATA_DB_URL}
-    # 删掉了 depends_on: redis
+      - APP_ENV=${APP_ENV}
 
   # 2. Worker 消费者
   worker:
     build: .
     container_name: bridge-worker
+    network_mode: "host" # 👈 核心：确保能通过 127.0.0.1 访问 Redis/MySQL
     restart: always
     environment:
       - RUN_MODE=worker
@@ -27,11 +28,13 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - METADATA_DB_URL=${METADATA_DB_URL}
+      - APP_ENV=${APP_ENV}
 
   # 3. Scheduler 调度器
   scheduler:
     build: .
     container_name: bridge-scheduler
+    network_mode: "host"
     restart: always
     environment:
       - RUN_MODE=scheduler
@@ -39,3 +42,4 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - METADATA_DB_URL=${METADATA_DB_URL}
+      - APP_ENV=${APP_ENV}
