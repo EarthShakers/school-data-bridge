@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Card,
   Row,
@@ -114,6 +114,22 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
   const [selectedBatchIndex, setSelectedBatchIndex] = useState(0); // 👈 新增：当前选中的 Batch 索引
   const [targetEnv, setTargetEnv] = useState<string | undefined>(undefined);
   const [envs, setEnvs] = useState<EnvironmentConfig[]>([]);
+
+  // 🔧 核心修复：预先对批次详情进行排序，并使用 useMemo 保证引用稳定，避免渲染干扰
+  const sortedBatchDetails = useMemo(() => {
+    if (
+      !selectedLog?.writeFailureDetails ||
+      !Array.isArray(selectedLog.writeFailureDetails)
+    ) {
+      return [];
+    }
+    // 使用解构 [...] 创建新数组，避免原地排序修改 state
+    return [...selectedLog.writeFailureDetails].sort((a: any, b: any) => {
+      const idxA = Number(a.batchIndex) || 0;
+      const idxB = Number(b.batchIndex) || 0;
+      return idxA - idxB;
+    });
+  }, [selectedLog?.writeFailureDetails]);
 
   const fetchEnvironments = async () => {
     try {
@@ -789,9 +805,7 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                 ),
                 children: (
                   <div>
-                    {selectedLog.writeFailureDetails &&
-                    Array.isArray(selectedLog.writeFailureDetails) &&
-                    selectedLog.writeFailureDetails.length > 0 ? (
+                    {sortedBatchDetails.length > 0 ? (
                       <div style={{ marginBottom: 16 }}>
                         <Space>
                           <Text strong>选择执行批次:</Text>
@@ -800,9 +814,12 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                             onChange={setSelectedBatchIndex}
                             style={{ width: 300 }}
                           >
-                            {selectedLog.writeFailureDetails.map(
+                            {sortedBatchDetails.map(
                               (batch: any, idx: number) => (
-                                <Option key={idx} value={idx}>
+                                <Option
+                                  key={`${batch.batchIndex}-${idx}`}
+                                  value={idx}
+                                >
                                   第 {batch.batchIndex} 批 - [
                                   {batch.status === "success" ? "成功" : "失败"}
                                   ]
@@ -832,10 +849,9 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                             icon={<FileTextOutlined />}
                             onClick={() => {
                               const content = JSON.stringify(
-                                Array.isArray(selectedLog.writeFailureDetails)
-                                  ? selectedLog.writeFailureDetails[
-                                      selectedBatchIndex
-                                    ]?.payload
+                                sortedBatchDetails.length > 0
+                                  ? sortedBatchDetails[selectedBatchIndex]
+                                      ?.payload
                                   : selectedLog.writeFailureDetails
                                       ?.lastPayload,
                                 null,
@@ -860,10 +876,9 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                         >
                           <pre style={{ fontSize: 12, margin: 0 }}>
                             {JSON.stringify(
-                              Array.isArray(selectedLog.writeFailureDetails)
-                                ? selectedLog.writeFailureDetails[
-                                    selectedBatchIndex
-                                  ]?.payload
+                              sortedBatchDetails.length > 0
+                                ? sortedBatchDetails[selectedBatchIndex]
+                                    ?.payload
                                 : selectedLog.writeFailureDetails?.lastPayload,
                               null,
                               2
@@ -888,10 +903,9 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                             icon={<FileTextOutlined />}
                             onClick={() => {
                               const content = JSON.stringify(
-                                Array.isArray(selectedLog.writeFailureDetails)
-                                  ? selectedLog.writeFailureDetails[
-                                      selectedBatchIndex
-                                    ]?.response
+                                sortedBatchDetails.length > 0
+                                  ? sortedBatchDetails[selectedBatchIndex]
+                                      ?.response
                                   : selectedLog.writeFailureDetails
                                       ?.lastResponse,
                                 null,
@@ -916,10 +930,9 @@ export const EntityConsole: React.FC<EntityConsoleProps> = ({
                         >
                           <pre style={{ fontSize: 12, margin: 0 }}>
                             {JSON.stringify(
-                              Array.isArray(selectedLog.writeFailureDetails)
-                                ? selectedLog.writeFailureDetails[
-                                    selectedBatchIndex
-                                  ]?.response
+                              sortedBatchDetails.length > 0
+                                ? sortedBatchDetails[selectedBatchIndex]
+                                    ?.response
                                 : selectedLog.writeFailureDetails?.lastResponse,
                               null,
                               2

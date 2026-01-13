@@ -146,10 +146,16 @@ export async function writeToInternalJavaService(
   });
 
   await Promise.all(tasks);
+
+  // 🔧 核心修复：确保 batchDetails 按照 batchIndex 升序排列，防止 UI 顺序错乱
+  const sortedBatchDetails = batchDetails.sort(
+    (a, b) => a.batchIndex - b.batchIndex
+  );
+
   return {
     success: successCount,
     failed: failedCount,
     errors: allErrors,
-    batchDetails,
+    batchDetails: sortedBatchDetails,
   };
 }

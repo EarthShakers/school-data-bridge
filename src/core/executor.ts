@@ -150,8 +150,8 @@ export async function runSyncTask(
         // 2. 如果 Java 接口返回了具体的错误 ID 列表，精准修正为 failed
         if (javaResult.errors.length > 0) {
           javaResult.errors.forEach((javaErr) => {
-            // 🔧 增强匹配：将 ID 统一转为字符串并剔除空格，防止类型不匹配（如 123 vs "123"）
             const searchId = String(javaErr.id).trim();
+            // 🔧 恢复为 find：只匹配批次中的第一条记录，保持 summary 统计的稳定性
             const record = batchRecords.find(
               (r) => String(r.id).trim() === searchId
             );
@@ -159,11 +159,6 @@ export async function runSyncTask(
             if (record) {
               record._importStatus = "failed";
               record._importError = `[Java业务] ${javaErr.message}`;
-            } else {
-              // 调试：如果还是匹配不上，打印出来看看到底是什么 ID
-              console.warn(
-                `[Executor] ⚠️ Could not match Java error ID: "${javaErr.id}" in current batch.`
-              );
             }
           });
         }
@@ -203,10 +198,18 @@ export async function runSyncTask(
           hasMore = false;
         }
       } else if (currentConfig.dataSource.type === "db") {
-        const dbBatchSize = currentConfig.dataSource.config.batchSize || 1000;
-        offset += dbBatchSize;
-        if (currentBatchSize < dbBatchSize) {
+        const dbConfig = currentConfig.dataSource.config;
+
+        // 🔧 关键修复：如果使用的是 raw SQL，目前不支持程序化分页，强制只抓取一轮
+        // 防止因为 currentBatchSize > batchSize 导致无限抓取同一份全量数据
+        if (dbConfig.sql) {
           hasMore = false;
+        } else {
+          const dbBatchSize = dbConfig.batchSize || 1000;
+          offset += dbBatchSize;
+          if (currentBatchSize < dbBatchSize) {
+            hasMore = false;
+          }
         }
       } else {
         hasMore = false;
