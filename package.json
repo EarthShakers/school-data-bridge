@@ -7,13 +7,13 @@
     "start": "ts-node src/index.ts",
     "dev": "next dev",
     "build": "next build",
-    "postinstall": "mkdir -p public/monaco-vs && cp -r node_modules/monaco-editor/min/vs public/monaco-vs/",
+    "postinstall": "node scripts/copy-monaco.mjs",
     "web:start": "next start",
     "lint": "next lint",
     "cli:dev": "ts-node-dev --respawn src/index.ts",
-    "worker": "RUN_MODE=worker tsx src/index.ts",
-    "scheduler": "RUN_MODE=scheduler tsx src/index.ts",
-    "produce": "RUN_MODE=producer tsx src/index.ts"
+    "worker": "cross-env RUN_MODE=worker tsx src/index.ts",
+    "scheduler": "cross-env RUN_MODE=scheduler tsx src/index.ts",
+    "produce": "cross-env RUN_MODE=producer tsx src/index.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
@@ -43,6 +43,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "@types/node": "^20.8.0",
     "@types/oracledb": "^6.10.0",
     "@types/pg": "^8.11.10",
